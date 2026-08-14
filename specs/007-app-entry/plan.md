@@ -36,7 +36,7 @@
 | 单实例锁 | ✅ | `app.requestSingleInstanceLock()`，失败即 `app.quit()`（实现 FR-007-001） |
 | 后台驻留 | ✅ | `window-all-closed` 显式 no-op（实现 FR-007-011） |
 | 优雅关闭 | ✅ | `before-quit` → `setQuitting(true)` + `host?.shutdown()` + `destroyTray()`（实现 FR-007-012） |
-| TypeScript strict / 无 as any | ✅ | 无类型压制；仅 Squirrel 启动用 `require`（带 eslint-disable 说明） |
+| TypeScript strict / 无 as any | ✅ | 无类型压制；electron-squirrel-startup 以静态 import 引入（类型声明于 src/electron-squirrel-startup.d.ts） |
 | 严禁空 catch | ✅ | 入口无 try/catch |
 
 ## 3. Research Findings
