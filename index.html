@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DeepSeek Harness Desktop</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #1e1e1e;
+        color: #cccccc;
+        font-family: system-ui, -apple-system, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .wrapper {
+        text-align: center;
+      }
+      .title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #e0e0e0;
+      }
+      .hint {
+        margin-top: 8px;
+        font-size: 13px;
+        color: #888888;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrapper">
+      <div class="title">DeepSeek Harness Desktop</div>
+      <div class="hint">正在启动 dsh Host…</div>
+    </div>
+    <script type="module" src="/src/renderer/renderer.ts"></script>
+  </body>
+</html>

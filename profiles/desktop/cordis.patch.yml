@@ -1,0 +1,19 @@
+# deepseek-harness-desktop 自定义 desktop profile 的用户 patch
+#
+# 目的（产品概念设计第 11 节 A1 方案）：
+#   - 复用 web 组合（dsh-base + dsh-web-app）
+#   - 微调为桌面：关闭 web-runtime 的 URL 打印（桌面应用无需打印「dsh web: http://...」）
+#   - webserver 端口由启动代码经 --port 0 注入（web-app bundle 的 webserver 行
+#     `port: !!js ctx.webStartup.port ?? 3080` 已支持，无需在此覆盖）
+#
+# 语法：覆盖行以 id 定位、整块替换 config（参考 dsh 仓库 cordis.patch.yml 示例）。
+# 覆盖基线（对照 deepseek-harness/packages/bundle/web-app/cordis.patch.yml 的
+# web-runtime 行，printUrl: true → false；surfaceContext/trustedHosts 保持原值）。
+
+- id: web-runtime
+  name: '@deepseek-ai/dsh-web-app'
+  inject: [webStartup]
+  config:
+    printUrl: false
+    surfaceContext: true
+    trustedHosts: !!js ctx.webStartup.trustedHosts
