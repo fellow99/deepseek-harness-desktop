@@ -89,3 +89,8 @@
 - **本地打包**：`npm run make`（Forge makers：squirrel/zip/deb/rpm）。
 - **宿主产物**：dsh 的 lib host/client + web dist 随包打入 resources（消费 dsh 时）。
 - **ABI**：MVP 裁掉 dsh native 沙箱（landlock），规避 Electron Node ABI 不一致。
+- **上游补丁（patches 机制）**：dsh 的 loader 依赖 Node 内部 API（`--expose-internals` /
+  `node-addon-require-builtin`，Electron 下均不可用），HMR 服务无法工作。通过
+  `patches/dsh-disable-hmr.patch`（给 `runProfile` 加 `DSH_DISABLE_HMR` 开关）禁用，
+  `npm run build:dsh`（`scripts/build-dsh.mjs`）自动 `git apply`（幂等，`--reverse --check`
+  检测已应用则跳过），dsh 升级后重新 apply。详见 README「开发」章节。

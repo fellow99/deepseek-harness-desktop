@@ -59,27 +59,24 @@ DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体�
 
 ### 消费 dsh（源码引用）
 
-dsh 与本工程同级目录、源码引用，开发前需先构建 dsh：
+dsh 与本工程同级目录、源码引用，开发前需先构建 dsh（一条命令，含 Electron 兼容 patch 自动 apply）：
 
 ```bash
-cd ../deepseek-harness
-corepack pnpm install
-corepack pnpm run build:lib:host
-corepack pnpm run build:lib:client
-corepack pnpm run build:web
+npm run build:dsh   # apply patches/ 补丁 + 安装依赖 + 构建 lib host/client + web dist
 ```
 
 ### Electron 兼容处理
 
 dsh 的 loader 通过 `node-addon-require-builtin` 原生模块（依赖 Electron V8 缺失的
 `GetAlignedPointerFromEmbedderData` 符号）或 `--expose-internals` 获取 Node 内部 API，
-两者在 Electron 下均不可用。`src/main/host.ts` 做了如下兼容（不改 dsh 源码）：
+两者在 Electron 下均不可用。`src/main/host.ts` 做了如下兼容：
 
 1. **workspace 包链接**：loader 回退默认 ESM import，需把 dsh workspace 包链接到其根
    node_modules（`ensureWorkspaceLinks`）。
 2. **禁用 HMR**：`cordis-plugin-hmr` 依赖 Node 内部 API，Electron 下无法工作，设
-   `DSH_DISABLE_HMR=1` 跳过 runProfile 的 watch-only HMR 挂载。该开关是 dsh 本地 patch
-   （`apps/cli/src/profile-boot.ts` 加 1 行），re-build dsh 后生效；dsh 升级需重新应用。
+   `DSH_DISABLE_HMR=1` 跳过 runProfile 的 watch-only HMR 挂载。该开关由
+   `patches/dsh-disable-hmr.patch` 提供，`build:dsh` 脚本自动 apply 到 dsh 源码
+   （详见 specs 的 patches 机制说明）。
 
 ### 启动 / 打包
 

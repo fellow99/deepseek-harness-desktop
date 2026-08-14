@@ -25,6 +25,12 @@ deepseek-harness-desktop/
 │
 ├── specs/                    # 规范文档（本目录，见 specs/README.md 索引）
 │
+├── patches/                  # dsh 上游补丁（git apply 机制）
+│   └── dsh-disable-hmr.patch # Electron 兼容：DSH_DISABLE_HMR 开关（dsh HMR 依赖 Node 内部 API）
+│
+├── scripts/                  # 构建脚本
+│   └── build-dsh.mjs         # apply patches/ 补丁 + pnpm install + 构建 dsh lib host/client + web dist
+│
 ├── profiles/                 # dsh 自定义 profile
 │   └── desktop/
 │       ├── package.json      # dsh.profile.bundles = [dsh-base, dsh-web-app]
@@ -36,7 +42,7 @@ deepseek-harness-desktop/
 └── src/
     ├── main/                 # Electron 主进程（= dsh Host 宿主）
     │   ├── index.ts          # 单实例锁 → 启动 host → 建窗 → 托盘/通知/生命周期编排
-    │   ├── host.ts           # runProfile('desktop') → { ctx, shutdown }；就绪判定（骨架）
+    │   ├── host.ts           # runProfile('desktop') → { ctx, shutdown }；就绪判定（已消费 dsh）
     │   ├── windows.ts        # BrowserWindow 创建、loadURL(localhost)、无边框/安全
     │   ├── tray.ts           # 系统托盘 + 后台驻留
     │   ├── notifications.ts  # 订阅 ctx session/event → 原生通知

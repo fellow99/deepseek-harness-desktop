@@ -1,0 +1,14 @@
+diff --git a/apps/cli/src/profile-boot.ts b/apps/cli/src/profile-boot.ts
+index 19c4abb245..3f19ca728d 100644
+--- a/apps/cli/src/profile-boot.ts
++++ b/apps/cli/src/profile-boot.ts
+@@ -265,7 +265,8 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
+   // landed mid-setup. Watching is unconditional: a one-shot surface exits
+   // through its bounded shutdown, which disposes the watchers before the
+   // loop drains.
+-  if (!signalShutdown.signal.aborted
++  if (!process.env.DSH_DISABLE_HMR
++    && !signalShutdown.signal.aborted
+     && ctx.fiber.state === FiberState.ACTIVE
+     && ctx.get('loader') !== undefined) {
+     try {
