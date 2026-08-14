@@ -1,4 +1,6 @@
 import { app, BrowserWindow } from 'electron';
+// 静态 import 使 Vite 将其打包进 bundle（forge Vite 插件的 ignore 会排除 node_modules，运行时无法 require）
+import started from 'electron-squirrel-startup';
 import {
   ensureLoopbackNoProxy,
   installCrashHandlers,
@@ -10,8 +12,7 @@ import { createTray, destroyTray } from './tray';
 import { setupNotifications } from './notifications';
 
 // 处理 Squirrel.Windows 安装/卸载时的快捷方式创建/删除（必须在 main 入口最前）
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-if (require('electron-squirrel-startup')) {
+if (started) {
   app.quit();
 }
 
