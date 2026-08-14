@@ -1,3 +1,9 @@
+import { app } from 'electron';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { inspect } from 'node:util';
+
 /**
  * dsh Host 宿主：在主进程内 runProfile('desktop') 挂起 dsh Host（含 webserver），
  * 渲染进程同源加载 localhost（产品概念设计第 7、9 节）。
@@ -8,10 +14,18 @@
  * - RunProfileOptions：`{ environment, profile, patchFiles, args }`（profile-boot.ts:174-183）
  * - webserver：`ctx.webServer.port` —— config.port 传 0 时返回 OS 分配端口
  *   （deepseek-harness/packages/host/webserver/src/index.ts:78-81）
- * - 调用示例：apps/cli/src/bin.ts:31-38（environment 用 loadLayeredEnv('dsh')）
+ * - profile 目录：`$DSH_HOME/profiles/<name>`（dsh-app-boot/src/profile.ts:104-111）
+ * - `$DSH_HOME`：环境变量 `DSH_HOME`，默认 `~/.dsh`（dsh-home-paths）
  */
 
-/** dsh Cordis Context 的最小接口（脚手架占位；消费 dsh 后替换为真实类型） */
+// dsh 编译产物位置：desktop 与 dsh 同级目录（../deepseek-harness）
+const DSH_ROOT = resolve(__dirname, '../../../deepseek-harness');
+const DSH_CLI_LIB = join(DSH_ROOT, 'apps/cli/lib');
+const DSH_APP_BOOT_LIB = join(DSH_ROOT, 'packages/boot/app-boot/lib/index.js');
+// desktop 工程自带的 desktop profile（开发模式相对路径）
+const DESKTOP_PROFILE_SRC = resolve(__dirname, '../../profiles/desktop');
+
+/** dsh Cordis Context 的最小接口（仅暴露桌面侧订阅事件所需的字段） */
 export interface HostContext {
   webServer: { port: number };
   /** 订阅 host 事件（cordis ctx.on），供托盘/通知用 */
@@ -30,27 +44,156 @@ export interface HostHandle {
 }
 
 /**
+ * 在 dsh CLI lib 目录中定位 profile-boot 的薄入口（re-export runProfile）。
+ * tsdown 构建产物文件名带内容 hash（如 profile-boot-BnJoK_kl.js），
+ * 不硬编码 hash，而是扫描目录按「薄入口仅 2 行 re-export」的特征定位。
+ */
+function findProfileBootEntry(): string | null {
+  try {
+    const candidates: { path: string; mtime: number }[] = [];
+    for (const file of readdirSync(DSH_CLI_LIB)) {
+      if (!file.startsWith('profile-boot-') || !file.endsWith('.js')) continue;
+      const fullPath = join(DSH_CLI_LIB, file);
+      const content = readFileSync(fullPath, 'utf8');
+      // 薄入口：`import { o as runProfile } from "./..."; export { runProfile };`
+      if (content.includes('export { runProfile') && content.length < 300) {
+        candidates.push({ path: fullPath, mtime: statSync(fullPath).mtimeMs });
+      }
+    }
+    // tsdown 每次构建生成新 hash 产物、旧产物残留，取 mtime 最新的薄入口
+    candidates.sort((a, b) => b.mtime - a.mtime);
+    return candidates[0]?.path ?? null;
+  } catch {
+    // dsh 未构建，降级
+  }
+  return null;
+}
+
+/**
+ * 将 desktop profile 安装到 `$DSH_HOME/profiles/desktop`（幂等）。
+ * desktop 的 profile 声明 `dsh.profile.bundles = [dsh-base, dsh-web-app]`（web 组合，
+ * 微调 printUrl），而 dsh 对未知 profile 的默认初始化只有 `dsh-base`（无 web-app），
+ * 故必须显式放置 desktop 工程自带的 profile。
+ */
+function ensureDesktopProfile(home: string): void {
+  const dest = join(home, 'profiles', 'desktop');
+  if (existsSync(join(dest, 'package.json'))) return;
+  if (!existsSync(DESKTOP_PROFILE_SRC)) return;
+  mkdirSync(dest, { recursive: true });
+  cpSync(DESKTOP_PROFILE_SRC, dest, { recursive: true });
+}
+
+/** dsh runProfile 的最小签名（动态 import 产物无类型，此处收窄以保持类型安全） */
+interface DshRunProfile {
+  (options: {
+    environment: unknown;
+    profile: string;
+    patchFiles: readonly string[];
+    args: readonly string[];
+  }): Promise<{
+    ctx: { webServer: { port: number }; on: HostContext['on'] };
+    shutdown: { shutdown: (code?: number) => void | Promise<void> };
+  }>;
+}
+
+/**
+ * 将 dsh 的 workspace 包链接到根 node_modules，使 loader 的默认 ESM import 可解析。
+ *
+ * 背景：dsh 的 loader（cordis-plugin-loader）通过 node-addon-require-builtin 原生模块
+ * 获取 Node 内部 ESM loader（internal import，锚定 profile 目录解析插件）。该原生模块
+ * 依赖 Electron V8 缺失的 GetAlignedPointerFromEmbedderData 符号（Electron 的 V8 为
+ * -electron 分支），在 Electron 下加载失败，internal 失效，loader 回退到默认 ESM import
+ * （从 vendor/loader/lib 向上解析）。pnpm 默认把 workspace 包链接在消费方 node_modules
+ * （apps/cli/node_modules），根 node_modules 仅含根 manifest 直接依赖，故默认 import
+ * 找不到插件。此处扫描 dsh 的全部 workspace 包源码目录（packages、vendor、apps），
+ * 以 junction 链接到根 node_modules/@deepseek-ai/，使其可解析（包的 exports 指向编译产物 lib）。
+ */
+function ensureWorkspaceLinks(): void {
+  const dest = join(DSH_ROOT, 'node_modules/@deepseek-ai');
+  mkdirSync(dest, { recursive: true });
+  for (const root of ['packages', 'vendor', 'apps']) {
+    const rootDir = join(DSH_ROOT, root);
+    if (!existsSync(rootDir)) continue;
+    for (const cat of readdirSync(rootDir)) {
+      const catDir = join(rootDir, cat);
+      if (!existsSync(join(catDir, 'package.json'))) {
+        // packages 为两级（packages/分类/包），vendor、apps 为一级
+        if (!existsSync(catDir)) continue;
+        try {
+          for (const pkg of readdirSync(catDir)) {
+            linkWorkspacePackage(join(catDir, pkg), dest);
+          }
+        } catch {
+          // 非目录，跳过
+        }
+      } else {
+        linkWorkspacePackage(catDir, dest);
+      }
+    }
+  }
+}
+
+/** 若目录是 @deepseek-ai 包，且根 node_modules 无对应链接，则以 junction 链接。 */
+function linkWorkspacePackage(pkgDir: string, dest: string): void {
+  const pkgJson = join(pkgDir, 'package.json');
+  if (!existsSync(pkgJson)) return;
+  try {
+    const name = JSON.parse(readFileSync(pkgJson, 'utf8')).name as string | undefined;
+    if (!name || !name.startsWith('@deepseek-ai/')) return;
+    const shortName = name.slice('@deepseek-ai/'.length);
+    const destPath = join(dest, shortName);
+    if (existsSync(destPath)) return;
+    symlinkSync(pkgDir, destPath, 'junction');
+  } catch {
+    // 解析失败或非 @deepseek-ai 包，跳过
+  }
+}
+
+/**
  * 启动 dsh Host（desktop profile，进程内，MVP）。
- *
- * TODO(消费 dsh)：接入 deepseek-harness 源码引用（产品概念设计第 8、11、12 节）：
- *   1. 构建 ../deepseek-harness（pnpm install + build:lib:host + build:web）
- *   2. 使用 profiles/desktop（dsh.profile.bundles = [dsh-base, dsh-web-app]，
- *      cordis.patch.yml 已覆盖 web-runtime.printUrl: false）
- *   3. 调用（参考 apps/cli/src/bin.ts:31-38）：
- *        const { runProfile } = await import('deepseek-harness/apps/cli/src/profile-boot');
- *        const { ctx, shutdown } = await runProfile({
- *          environment: loadLayeredEnv('dsh'),
- *          profile: 'desktop',
- *          patchFiles: [],
- *          args: ['--port', '0'],
- *        });
- *        const port = ctx.webServer.port;
- *        return { ctx, shutdown: (c) => shutdown.shutdown(c ?? 0), port,
- *                 url: `http://127.0.0.1:${port}/` };
- *   4. 在 vite.main.config.ts 把 dsh 依赖（@deepseek-ai/*、cordis）标 external
- *
- * 脚手架阶段 dsh 尚未接入，返回 null；主进程据此显示兜底页，不阻塞 Electron 启动。
+ * 返回 HostHandle；dsh 未构建 / 启动失败时返回 null（主进程据此显示兜底页）。
  */
 export async function startHost(): Promise<HostHandle | null> {
-  return null;
+  const entry = findProfileBootEntry();
+  if (!entry) {
+    console.error('[dsh-desktop] dsh 未构建或产物缺失，宿主未启动');
+    return null;
+  }
+  // 独立 DSH_HOME：避免污染用户全局 ~/.dsh；profile 与会话数据落在应用 userData
+  if (!process.env.DSH_HOME) {
+    process.env.DSH_HOME = join(app.getPath('userData'), '.dsh');
+  }
+  ensureDesktopProfile(process.env.DSH_HOME);
+  ensureWorkspaceLinks();
+  // dsh 的 HMR 依赖 Node 内部 API（--expose-internals / node-addon-require-builtin），
+  // Electron 下不可用，禁用之（生产桌面壳无需用户 patch 热重载）。
+  process.env.DSH_DISABLE_HMR = '1';
+
+  try {
+    // 动态 import dsh 的 ESM 编译产物（与 dsh CLI bin.js 的方式一致）；
+    // 产物内部的 @deepseek-ai/* workspace 依赖由 Node 从 dsh 的 node_modules 解析。
+    const profileBoot = await import(pathToFileURL(entry).href);
+    const appBoot = await import(pathToFileURL(DSH_APP_BOOT_LIB).href);
+    const runProfile = profileBoot.runProfile as DshRunProfile;
+    const loadLayeredEnv = appBoot.loadLayeredEnv as (binName: string) => unknown;
+
+    const { ctx, shutdown } = await runProfile({
+      environment: loadLayeredEnv('dsh'),
+      profile: 'desktop',
+      patchFiles: [],
+      args: ['--port', '0'],
+    });
+    const port = ctx.webServer.port;
+    console.log(`[dsh-desktop] host 就绪: http://127.0.0.1:${port}/`);
+    return {
+      ctx,
+      shutdown: (code) => shutdown.shutdown(code ?? 0),
+      port,
+      url: `http://127.0.0.1:${port}/`,
+    };
+  } catch (err) {
+    // 完整打印（含 AggregateError 的 errors 数组与 cause 链），便于定位失败插件
+    console.error('[dsh-desktop] host 启动失败:', inspect(err, { depth: 8, colors: false }));
+    return null;
+  }
 }
