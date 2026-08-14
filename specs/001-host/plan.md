@@ -60,23 +60,31 @@
 - webserver 端口 0 语义 —— `packages/host/webserver/src/index.ts:78-81`。
 - 调用示例（`environment` 用 `loadLayeredEnv('dsh')`）—— `apps/cli/src/bin.ts:31-38`。
 
-### 3.3 消费 dsh 的 TODO 步骤（plan 固化）
+### 3.3 消费 dsh 的实现（已落地）
+
+`startHost()` 动态 import dsh 编译产物（与 dsh CLI `bin.js` 一致），调用 `runProfile('desktop')`：
 
 ```ts
-const { runProfile } = await import('deepseek-harness/apps/cli/src/profile-boot');
+const { runProfile } = await import(pathToFileURL(entry).href);      // apps/cli/lib/profile-boot-*.js（薄入口）
+const { loadLayeredEnv } = await import(pathToFileURL(DSH_APP_BOOT_LIB).href);  // dsh-app-boot/lib/index.js
 const { ctx, shutdown } = await runProfile({
   environment: loadLayeredEnv('dsh'),
   profile: 'desktop',
   patchFiles: [],
   args: ['--port', '0'],
 });
-const port = ctx.webServer.port;
-return { ctx, shutdown: (c) => shutdown.shutdown(c ?? 0), port, url: `http://127.0.0.1:${port}/` };
 ```
 
-前置：构建 `../deepseek-harness`（`pnpm install` + `build:lib:host` + `build:web`）；
-`desktop` profile：`dsh.profile.bundles = [dsh-base, dsh-web-app]`，`cordis.patch.yml` 覆盖 `web-runtime.printUrl: false`；
-`vite.main.config.ts` 将 dsh 依赖（`@deepseek-ai/*`、cordis）标 `external`。
+**Electron 兼容处理**（dsh loader 依赖 Node 内部 API，Electron 下不可用）：
+
+1. **独立 DSH_HOME**：`process.env.DSH_HOME = userData/.dsh`，避免污染 `~/.dsh`；启动前把
+   `profiles/desktop` 复制到 `$DSH_HOME/profiles/desktop`（dsh 对未知 profile 默认仅 `dsh-base`）。
+2. **workspace 包链接**：loader 的 internal import 依赖 `node-addon-require-builtin`（Electron V8
+   缺 `GetAlignedPointerFromEmbedderData` 符号）失效，回退默认 ESM import；故把 dsh workspace 包
+   链接到其根 node_modules（`ensureWorkspaceLinks`）。
+3. **禁用 HMR**：`cordis-plugin-hmr` 需 `--expose-internals`，设 `DSH_DISABLE_HMR=1` 跳过
+   runProfile 的 watch-only HMR 挂载（dsh 本地 patch，见 README「开发」章节）。
+4. **产物定位**：tsdown 每次构建生成新 hash 产物、旧产物残留，按 mtime 选最新薄入口。
 
 ## 4. 数据模型
 

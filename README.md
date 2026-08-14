@@ -2,7 +2,7 @@
 
 > 基于 Electron 的 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 桌面封装，提供深度桌面集成体验。
 
-**当前状态**：🚧 设计阶段——产品概念设计已完成，代码尚未开始。详见 [docs/000-产品概念设计.md](docs/000-产品概念设计.md)。
+**当前状态**：✅ 脚手架与消费 dsh 已完成——主进程 `runProfile('desktop')` 挂起 dsh Host，渲染进程同源加载 dsh Web UI（托盘/通知等 MVP 能力待接入）。详见 [docs/000-产品概念设计.md](docs/000-产品概念设计.md)。
 
 ---
 
@@ -54,6 +54,42 @@ DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体�
 - **Electron** + **Electron Forge**（脚手架与打包）
 - **deepseek-harness**（与本工程**同级目录**，非 submodule，引用路径 `../deepseek-harness`；消费方式为本地源码引用）
 - **TypeScript**
+
+## 开发
+
+### 消费 dsh（源码引用）
+
+dsh 与本工程同级目录、源码引用，开发前需先构建 dsh：
+
+```bash
+cd ../deepseek-harness
+corepack pnpm install
+corepack pnpm run build:lib:host
+corepack pnpm run build:lib:client
+corepack pnpm run build:web
+```
+
+### Electron 兼容处理
+
+dsh 的 loader 通过 `node-addon-require-builtin` 原生模块（依赖 Electron V8 缺失的
+`GetAlignedPointerFromEmbedderData` 符号）或 `--expose-internals` 获取 Node 内部 API，
+两者在 Electron 下均不可用。`src/main/host.ts` 做了如下兼容（不改 dsh 源码）：
+
+1. **workspace 包链接**：loader 回退默认 ESM import，需把 dsh workspace 包链接到其根
+   node_modules（`ensureWorkspaceLinks`）。
+2. **禁用 HMR**：`cordis-plugin-hmr` 依赖 Node 内部 API，Electron 下无法工作，设
+   `DSH_DISABLE_HMR=1` 跳过 runProfile 的 watch-only HMR 挂载。该开关是 dsh 本地 patch
+   （`apps/cli/src/profile-boot.ts` 加 1 行），re-build dsh 后生效；dsh 升级需重新应用。
+
+### 启动 / 打包
+
+```bash
+npm install
+npm start          # 开发模式：Vite 构建 + 启动 Electron，主进程挂起 dsh Host 并加载其 Web UI
+npm run package    # 打包：out/DeepSeek Harness Desktop-win32-x64/
+```
+
+> 打包目前仅含桌面壳；dsh 构建产物（lib host/client + web dist）打进 resources 属后续步骤。
 
 ## 目录结构（规划）
 

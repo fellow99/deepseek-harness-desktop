@@ -1,7 +1,7 @@
 # Host 宿主 功能规格
 
 > Module: 001-host
-> Status: Implemented（脚手架阶段：dsh 尚未接入，startHost 返回 null）
+> Status: Implemented（已消费 dsh：runProfile('desktop') 挂起 Host，渲染进程同源加载 dsh UI）
 > Last Updated: 2026-08-14
 
 ## 1. 模块概述
@@ -72,9 +72,9 @@
 - FR-001-006：系统 MUST 通过宿主上下文暴露事件订阅能力，供托盘 / 通知等桌面能力订阅宿主事件。
 - FR-001-007：系统 MUST 提供优雅关闭句柄，调用后释放（dispose）宿主插件树。
 
-### 3.4 脚手架降级（当前阶段）
+### 3.4 降级契约
 
-- FR-001-008：在 dsh 尚未接入（脚手架阶段）时，系统 MUST 返回空句柄（`null`）而非阻塞应用启动，使主进程能够显示兜底页继续运行。
+- FR-001-008：在 dsh 未构建 / 产物缺失 / 启动失败时，系统 MUST 返回空句柄（`null`）而非阻塞应用启动，使主进程能够显示兜底页继续运行。
 
 ## 4. 关键实体
 
