@@ -10,7 +10,7 @@
 
 DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体框架），采用「一切皆插件」的架构，原生入口是 `dsh web`（浏览器 Web UI）。
 
-本项目用 Electron 把 `dsh` 的 Web UI 装进原生桌面壳，补齐托盘、通知、原生文件选择、多窗口等桌面能力，让 agent harness 像一个真正的桌面应用那样运行——**不是**「包一层 `dsh web` 指向 localhost」的粗壳，而是按 `dsh` 官方预留的 **IPC 载体**方案实现的一等公民桌面应用。
+本项目用 Electron 把 `dsh` 的 Web UI 装进原生桌面壳，补齐托盘、通知等桌面能力，界面功能完全沿用 dsh 标准前端，让 agent harness 像一个真正的桌面应用那样运行——**不是**「包一层 `dsh web` 指向 localhost」的粗壳，而是按 `dsh` 官方预留的 **IPC 载体**方案实现的一等公民桌面应用。
 
 ## 核心设计
 
@@ -24,7 +24,7 @@ DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体�
 │    └─ 无 webserver、无端口                                   │
 │  fetchHandler = toFetchHandler(ctx.apiProxy)  ← 含 SSE 下行 │
 │  ┌─ ipcMain.handle('dsh:unary') / ('dsh:stream') ─────────┐ │
-│  └─ Tray / Notification / dialog / 多窗口 / 原生能力       │ │
+│  └─ Tray / Notification / 原生能力                         │ │
 └──────────────▲─────────────────────────────────────────────┘ │
                │ contextBridge：window.dsh（doFetch 桥接）      │
 ┌──────────────┴───────────────────────────────────────────────┐
@@ -40,12 +40,10 @@ DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体�
 
 - ✅ 系统托盘 + 后台驻留
 - ✅ 原生通知
-- ✅ 原生文件/目录选择器
 - ✅ 无边框窗口 / 自绘标题栏
 - ✅ 剪贴板图片粘贴
-- ✅ 多窗口
 
-（暂缓：全局快捷键唤起、开机自启）
+（暂缓：全局快捷键唤起、开机自启、多窗口；原生文件选择沿用 dsh 标准前端目录浏览）
 
 ## 目标平台与分发
 
@@ -69,10 +67,9 @@ deepseek-harness-desktop/
 │   │   ├── index.ts           # 单实例锁 → runProfile → 窗口/托盘生命周期
 │   │   ├── host.ts            # runProfile('desktop') → { ctx, fetchHandler, shutdown }
 │   │   ├── ipc.ts             # ipcMain.handle：dsh:unary / dsh:stream / 窗口控制 / 原生能力
-│   │   ├── windows.ts         # BrowserWindow 创建、多窗口、file:// 加载 dist
+│   │   ├── windows.ts         # BrowserWindow 创建、file:// 加载 dist
 │   │   ├── tray.ts            # 系统托盘 + 后台驻留
 │   │   ├── notifications.ts   # 订阅 session/event → 原生通知
-│   │   ├── native-picker.ts   # Electron dialog → host.pickDirectory native seam
 │   │   └── lifecycle.ts       # 崩溃兜底、优雅关闭
 │   ├── preload/index.ts       # contextBridge：window.dsh
 │   └── renderer/
