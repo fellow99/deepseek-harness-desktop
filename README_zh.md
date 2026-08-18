@@ -143,6 +143,7 @@ npm run package    # 打包：prepackage 自动 collect（pnpm deploy 物化 dsh
 ## 相关文档
 
 - [docs/000-产品概念设计.md](docs/000-产品概念设计.md) —— 产品概念设计（架构方案、数据流、模块划分、开放问题）
+- [specs/README.md](specs/README.md) —— 规范文档索引（项目级 + 模块级规格文档）
 - [AGENTS.md](AGENTS.md) —— AI Agent 工作规范
 
 ## 参考

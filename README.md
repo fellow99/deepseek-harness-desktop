@@ -138,6 +138,7 @@ This project and deepseek-harness (dsh) live in **sibling directories** (not a s
 ## Related docs
 
 - [docs/000-产品概念设计.md](docs/000-产品概念设计.md) — product concept design (architecture, data flow, module breakdown, open questions)
+- [specs/README.md](specs/README.md) — spec document index (project-level and module-level specs)
 - [AGENTS.md](AGENTS.md) — AI agent working conventions
 
 ## References
