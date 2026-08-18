@@ -1,151 +1,150 @@
-# DeepSeek Harness Desktop
-
-> 基于 Electron 的 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 桌面封装，提供深度桌面集成体验。
-
-**当前状态**：✅ 脚手架与消费 dsh 已完成——主进程 `runProfile('desktop')` 挂起 dsh Host，渲染进程同源加载 dsh Web UI（托盘/通知等 MVP 能力待接入）。详见 [docs/000-产品概念设计.md](docs/000-产品概念设计.md)。
+[中文](./README_zh.md) | English
 
 ---
 
-## 这是什么
+# DeepSeek Harness Desktop
 
-DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体框架），采用「一切皆插件」的架构，原生入口是 `dsh web`（浏览器 Web UI）。
+> An Electron-based desktop wrapper for [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness), providing deep desktop integration.
 
-本项目用 Electron 把 `dsh` 的 Web UI 装进原生桌面壳，补齐托盘、通知等桌面能力，界面功能完全沿用 dsh 标准前端，让 agent harness 像一个真正的桌面应用那样运行——**不是**「包一层 `dsh web` 指向 localhost」的粗壳，而是按 dsh 现有架构实现的一等公民桌面应用。
+**Status**: ✅ Scaffold and dsh consumption complete — the main process runs `runProfile('desktop')` to host the dsh Host, and the renderer loads the dsh Web UI same-origin (tray/notification MVP capabilities pending). See [docs/000-产品概念设计.md](docs/000-产品概念设计.md) for details.
 
-## 核心设计
+---
 
-`dsh` 已完成 **Host/Client 分层**，且它的 webserver **同时服务 SPA dist 和 `/api`**。因此桌面壳采用**进程内 Host + webserver + localhost 同源数据面**：
+## What is this
+
+DeepSeek Harness (`dsh`) is an open-source agent harness by DeepSeek AI, built on an "everything is a plugin" architecture; its native entry is `dsh web` (a browser Web UI).
+
+This project wraps the dsh Web UI in a native desktop shell with Electron, adding desktop capabilities such as tray and notifications while fully reusing the dsh frontend — making the agent harness run like a first-class desktop app. It is **not** a thin "wrap `dsh web` pointing at localhost" shell, but a first-class desktop application built on dsh's existing architecture.
+
+## Core design
+
+`dsh` has completed its **Host/Client split**, and its webserver **serves both the SPA dist and `/api`**. The desktop shell therefore uses an **in-process Host + webserver + localhost same-origin data plane**:
 
 ```
-┌─ Electron 主进程（Node.js，也承载 dsh Host）─────────────────┐
-│  runProfile('desktop', ['--port','0']) → { ctx, shutdown }    │
-│    ├─ webserver   ← 绑定 127.0.0.1:<空闲端口>，服务 dist + /api│
-│    ├─ apiProxy    ← RPC 网关                                  │
-│    └─ connection  ← 已把 /api + WebSocket 注册到 webserver     │
-│  就绪后 loadURL(`http://127.0.0.1:${ctx.webServer.port}/`)    │
-│  ┌─ Tray / Notification：订阅 ctx 的 session/event            │
-│  └─ 无边框窗口控制：薄 IPC(min/max/close)                     │
-└──────────────▲───────────────────────────────────────────────┘
-               │ contextBridge：window.dsh（仅窗口控制等薄 IPC） │
-┌──────────────┴───────────────────────────────────────────────┐
-│ 渲染进程：loadURL('http://127.0.0.1:<port>/')  ← 同源          │
-│   标准 dsh Web UI（WebApiClient：fetch /api + WS 事件流）      │
-└──────────────────────────────────────────────────────────────┘
+┌─ Electron main process (Node.js, also hosts dsh Host)──────────────┐
+│  runProfile('desktop', ['--port','0']) → { ctx, shutdown }          │
+│    ├─ webserver   ← bound to 127.0.0.1:<free port>, serves dist+/api│
+│    ├─ apiProxy    ← RPC gateway                                     │
+│    └─ connection  ← already registered /api + WebSocket on webserver│
+│  once ready: loadURL(`http://127.0.0.1:${ctx.webServer.port}/`)     │
+│  ┌─ Tray / Notification: subscribe to ctx session/event             │
+│  └─ Frameless window controls: thin IPC (min/max/close)             │
+└───────────────▲────────────────────────────────────────────────────┘
+                │ contextBridge: window.dsh (thin IPC, window controls)│
+┌───────────────┴────────────────────────────────────────────────────┐
+│ Renderer: loadURL('http://127.0.0.1:<port>/')  ← same-origin        │
+│   standard dsh Web UI (WebApiClient: fetch /api + WS event stream)  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-关键点：**渲染进程同源加载 localhost，零 CORS、零鉴权、零自定义协议、零 IPC 载体**——复用 dsh 现有的 `WebApiClient`（HTTP 上行 + WebSocket 下行），**零上游改动**。
+Key point: **the renderer loads localhost same-origin — zero CORS, zero auth, zero custom protocol, zero IPC carrier** — reusing dsh's existing `WebApiClient` (HTTP uplink + WebSocket downlink), **zero upstream changes**.
 
-## 计划中的 MVP 功能
+## Planned MVP features
 
-- ✅ 系统托盘（退出/唤回）
-- ✅ 原生通知
-- ✅ 无边框窗口 / 自绘标题栏
-- ✅ 剪贴板图片粘贴
+- ✅ System tray (quit / restore)
+- ✅ Native notifications
+- ✅ Frameless window / custom title bar
+- ✅ Clipboard image paste
 
-（暂缓：全局快捷键唤起、开机自启、多窗口；原生文件选择沿用 dsh 标准前端目录浏览）
+(Deferred: global shortcut, launch at login, multiple windows; native file picker reuses dsh's standard frontend directory browser)
 
-## 目标平台与分发
+## Target platforms & distribution
 
-- **平台**：Windows + Linux（macOS 后续再考虑）
-- **分发**：先本地打包自用（Electron Forge `make`），暂不做自动更新、代码签名、商店分发
+- **Platforms**: Windows + Linux (macOS later)
+- **Distribution**: local packaging for personal use (Electron Forge `make`); no auto-update, code signing, or store distribution yet
 
-## 技术栈
+## Tech stack
 
-- **Electron** + **Electron Forge**（脚手架与打包）
-- **deepseek-harness**（与本工程**同级目录**，非 submodule，引用路径 `../deepseek-harness`；消费方式为本地源码引用）
+- **Electron** + **Electron Forge** (scaffolding & packaging)
+- **deepseek-harness** (a sibling directory of this project, not a submodule, referenced as `../deepseek-harness`; consumed via local source reference)
 - **TypeScript**
 
-## 开发
+## Development
 
-### 集成方式
+### Integration approach
 
-- **源码引用**：dsh 与本工程同级目录（`../deepseek-harness`，非 submodule），消费其编译产物。
-- **Host 集成**：`src/main/host.ts` 动态 import dsh 的 `runProfile`（apps/cli 编译产物），
-  主进程内挂起 dsh Host（webserver 绑定 `127.0.0.1:<空闲端口>`），返回
-  `{ ctx, shutdown, port, url }` 句柄。
-- **同源数据面**：渲染进程 `loadURL(http://127.0.0.1:<port>/)` 同源加载 dsh Web UI，复用
-  `WebApiClient`（HTTP 上行 + WebSocket 下行），零 CORS、零鉴权、零新载体。
-- **desktop profile**：`profiles/desktop/`（`dsh.profile.bundles = [dsh-base, dsh-web-app]`，
-  cordis.patch.yml 覆盖 `web-runtime.printUrl: false`），运行时复制到
-  `$DSH_HOME/profiles/desktop`。
+- **Source reference**: dsh lives in a sibling directory (`../deepseek-harness`, not a submodule); we consume its build artifacts.
+- **Host integration**: `src/main/host.ts` dynamically imports dsh's `runProfile` (apps/cli build artifact), hosting the dsh Host in the main process (webserver bound to `127.0.0.1:<free port>`), returning a `{ ctx, shutdown, port, url }` handle.
+- **Same-origin data plane**: the renderer does `loadURL(http://127.0.0.1:<port>/)` to load the dsh Web UI same-origin, reusing `WebApiClient` (HTTP uplink + WebSocket downlink) — zero CORS, zero auth, zero new carrier.
+- **desktop profile**: `profiles/desktop/` (`dsh.profile.bundles = [dsh-base, dsh-web-app]`, with cordis.patch.yml overriding `web-runtime.printUrl: false`), copied to `$DSH_HOME/profiles/desktop` at runtime.
 
-### 编译过程（含 patches）
+### Build process (with patches)
 
-dsh 依赖 Node 内部 API（HMR、原生目录对话框），Electron 下不可用，需打两个补丁后构建。
-一条命令完成（幂等，`--reverse --check` 检测已应用则跳过）：
+dsh depends on Node internal APIs (HMR, native directory dialog) that are unavailable under Electron, so two patches must be applied before building. One command does it all (idempotent — `--reverse --check` detects already-applied and skips):
 
 ```bash
-npm run build:dsh   # ① git apply patches/ 两个补丁 → ② pnpm install（node_modules 缺失时）→ ③ build:lib:host + build:lib:client + build:web
+npm run build:dsh   # ① git apply both patches under patches/ → ② pnpm install (if node_modules missing) → ③ build:lib:host + build:lib:client + build:web
 ```
 
-| 补丁 | 作用 |
+| Patch | Purpose |
 |---|---|
-| `patches/dsh-disable-hmr.patch` | 给 `runProfile` 加 `DSH_DISABLE_HMR` 开关，跳过 watch-only HMR（HMR 依赖 `--expose-internals`）|
-| `patches/dsh-disable-native-picker.patch` | 让 directory-picker 在 Electron 下强制用 browse（原生对话框 worker 用 electron.exe 启动失败）|
+| `patches/dsh-disable-hmr.patch` | Adds a `DSH_DISABLE_HMR` switch to `runProfile`, skipping watch-only HMR (HMR depends on `--expose-internals`) |
+| `patches/dsh-disable-native-picker.patch` | Forces directory-picker to use browse under Electron (the native dialog worker fails because it spawns electron.exe) |
 
-> Electron 兼容根因：dsh 的 loader 经 `node-addon-require-builtin` 原生模块获取 Node 内部
-> ESM loader，该模块依赖 Electron V8 缺失的 `GetAlignedPointerFromEmbedderData` 符号而失效；
-> 开发模式下 loader 回退默认 ESM import，由 `host.ts` 的 `ensureWorkspaceLinks` 把 workspace
-> 包链接到 dsh 根 node_modules 解决。
+> Electron compatibility root cause: dsh's loader obtains the Node internal ESM loader via the
+> `node-addon-require-builtin` native module, which fails under Electron because Electron's V8
+> lacks the `GetAlignedPointerFromEmbedderData` symbol; in development the loader falls back to
+> default ESM import, resolved by `host.ts`'s `ensureWorkspaceLinks` linking workspace packages
+> into dsh's root node_modules.
 
-### 启动 / 打包
+### Start / package
 
 ```bash
 npm install
-npm start          # 开发模式：Vite 构建 + 启动 Electron，主进程挂起 dsh Host 并加载其 Web UI
-npm run package    # 打包：prepackage 自动 collect（pnpm deploy 物化 dsh 产物到 dsh-dist/，extraResource 打进 resources/dsh-dist）
+npm start          # Development: Vite build + launch Electron, main process hosts dsh Host and loads its Web UI
+npm run package    # Package: prepackage auto-collects (pnpm deploy materializes dsh artifacts into dsh-dist/, extraResource copies into resources/dsh-dist)
 ```
 
-> 打包产物 `out/DeepSeek Harness Desktop-win32-x64/` 已含 dsh（lib + node_modules + web dist + profile），exe 可直接运行 dsh。
+> The packaged output `out/DeepSeek Harness Desktop-win32-x64/` already includes dsh (lib + node_modules + web dist + profile); the exe runs dsh directly.
 
-## 目录结构
+## Directory structure
 
-本工程与 deepseek-harness（dsh）**同级目录**（非 submodule），经源码引用集成：
+This project and deepseek-harness (dsh) live in **sibling directories** (not a submodule), integrated via source reference:
 
 ```
-（同级目录）
-├── deepseek-harness-desktop/      # 本工程（Electron 桌面壳）
-│   ├── docs/                      # 产品概念设计
-│   ├── specs/                     # 规范文档（as-built，索引见 specs/README.md）
-│   ├── patches/                   # dsh 上游补丁（git apply，build:dsh 自动应用）
+(sibling directories)
+├── deepseek-harness-desktop/      # This project (Electron desktop shell)
+│   ├── docs/                      # Product concept design
+│   ├── specs/                     # Spec documents (as-built; see specs/README.md for index)
+│   ├── patches/                   # dsh upstream patches (git apply, auto-applied by build:dsh)
 │   │   ├── dsh-disable-hmr.patch
 │   │   └── dsh-disable-native-picker.patch
-│   ├── scripts/                   # 构建脚本
-│   │   ├── build-dsh.mjs          # apply patches + 安装依赖 + 构建 dsh 产物
-│   │   └── collect-dsh.mjs        # 收集 dsh 产物到 dsh-dist/（pnpm deploy + 物化）
-│   ├── profiles/desktop/          # 自定义 desktop profile（dsh.profile.bundles + cordis.patch.yml）
+│   ├── scripts/                   # Build scripts
+│   │   ├── build-dsh.mjs          # apply patches + install deps + build dsh artifacts
+│   │   └── collect-dsh.mjs        # collect dsh artifacts into dsh-dist/ (pnpm deploy + materialize)
+│   ├── profiles/desktop/          # Custom desktop profile (dsh.profile.bundles + cordis.patch.yml)
 │   ├── src/
-│   │   ├── main/                  # Electron 主进程（= dsh Host 宿主）
-│   │   │   ├── index.ts           # 单实例锁 → 启动 host → 建窗 → 托盘/通知/生命周期
-│   │   │   ├── host.ts            # runProfile('desktop') → { ctx, shutdown }；就绪判定
-│   │   │   ├── windows.ts         # BrowserWindow、loadURL(localhost)、无边框/安全
-│   │   │   ├── tray.ts            # 系统托盘（退出/唤回）
-│   │   │   ├── notifications.ts   # 订阅 ctx session/event → 原生通知
-│   │   │   └── lifecycle.ts       # NO_PROXY/CA、崩溃兜底
-│   │   ├── preload/index.ts       # contextBridge：window.dsh（薄 IPC）
-│   │   └── renderer/renderer.ts   # 极薄渲染入口（兜底加载页）
-│   ├── forge.config.ts            # Electron Forge 配置（extraResource 打进 resources/dsh-dist）
-│   ├── vite.*.config.ts           # Vite 配置（main/preload/renderer）
-│   ├── index.html                 # 渲染入口（Forge Vite 约定在项目根）
-│   └── resources/                 # 应用图标、托盘图标
+│   │   ├── main/                  # Electron main process (= dsh Host host)
+│   │   │   ├── index.ts           # single-instance lock → start host → create window → tray/notification/lifecycle
+│   │   │   ├── host.ts            # runProfile('desktop') → { ctx, shutdown }; readiness determination
+│   │   │   ├── windows.ts         # BrowserWindow, loadURL(localhost), frameless/security
+│   │   │   ├── tray.ts            # system tray (quit/restore)
+│   │   │   ├── notifications.ts   # subscribe to ctx session/event → native notifications
+│   │   │   └── lifecycle.ts       # NO_PROXY/CA, crash handling
+│   │   ├── preload/index.ts       # contextBridge: window.dsh (thin IPC)
+│   │   └── renderer/renderer.ts   # minimal renderer entry (fallback loading page)
+│   ├── forge.config.ts            # Electron Forge config (extraResource copies into resources/dsh-dist)
+│   ├── vite.*.config.ts           # Vite configs (main/preload/renderer)
+│   ├── index.html                 # renderer entry (Forge Vite convention: at project root)
+│   └── resources/                 # app icon, tray icon
 │
-└── deepseek-harness/              # 被封装宿主（dsh，源码引用，非 submodule）
-    ├── apps/                      # cli（dsh bin，profile-boot）、web（Web 前端，build:web 产出 dist）
-    ├── packages/                  # host / client / core / session 等 workspace 包
-    ├── vendor/                    # vendored cordis 框架包（cordis / loader / hmr 等）
-    └── native/                    # landlock-run 原生模块（Linux 沙箱，MVP 已裁掉）
+└── deepseek-harness/              # The wrapped host (dsh, source reference, not a submodule)
+    ├── apps/                      # cli (dsh bin, profile-boot), web (Web frontend, build:web produces dist)
+    ├── packages/                  # host / client / core / session workspace packages
+    ├── vendor/                    # vendored cordis framework packages (cordis / loader / hmr / ...)
+    └── native/                    # landlock-run native module (Linux sandbox, cut in MVP)
 ```
 
-## 相关文档
+## Related docs
 
-- [docs/000-产品概念设计.md](docs/000-产品概念设计.md) —— 产品概念设计（架构方案、数据流、模块划分、开放问题）
-- [AGENTS.md](AGENTS.md) —— AI Agent 工作规范
+- [docs/000-产品概念设计.md](docs/000-产品概念设计.md) — product concept design (architecture, data flow, module breakdown, open questions)
+- [AGENTS.md](AGENTS.md) — AI agent working conventions
 
-## 参考
+## References
 
-- [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（同级目录 `../deepseek-harness`）—— 被封装的宿主，其 `docs/` 目录含完整架构文档
-- [opencode](https://github.com/sst/opencode)（桌面壳参考：`packages/desktop/`）—— 类似的「用 Electron 包装 agent harness」需求
+- [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) (sibling directory `../deepseek-harness`) — the wrapped host; its `docs/` directory contains full architecture docs
+- [opencode](https://github.com/sst/opencode) (desktop shell reference: `packages/desktop/`) — a similar "wrap an agent harness with Electron" use case
 
-## 许可证
+## License
 
 [MIT](LICENSE) © 2026 fellow99
