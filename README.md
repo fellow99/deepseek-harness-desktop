@@ -37,7 +37,7 @@ DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体�
 
 ## 计划中的 MVP 功能
 
-- ✅ 系统托盘 + 后台驻留
+- ✅ 系统托盘（退出/唤回）
 - ✅ 原生通知
 - ✅ 无边框窗口 / 自绘标题栏
 - ✅ 剪贴板图片粘贴
@@ -99,7 +99,7 @@ deepseek-harness-desktop/
 │   │   ├── index.ts           # 单实例锁 → runProfile → 建窗 → 托盘/生命周期
 │   │   ├── host.ts            # runProfile('desktop') → { ctx, shutdown }；就绪判定
 │   │   ├── windows.ts         # BrowserWindow、loadURL(localhost)、无边框/titleBarOverlay、安全
-│   │   ├── tray.ts            # 系统托盘 + 后台驻留
+│   │   ├── tray.ts            # 系统托盘（退出/唤回）
 │   │   ├── notifications.ts   # 订阅 ctx session/event → 原生通知
 │   │   └── lifecycle.ts       # NO_PROXY/CA、崩溃兜底、优雅关闭
 │   ├── preload/index.ts       # contextBridge：window.dsh（薄 IPC）

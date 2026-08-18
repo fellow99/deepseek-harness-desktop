@@ -29,7 +29,7 @@
 | 原则 | 状态 | 说明 |
 |---|---|---|
 | 架构宪法 · 只写装配代码 | ✅ | 仅用 Electron `Tray`/`Menu` 装配壳层能力，不触碰 dsh 业务 |
-| 生命周期宪法 · 后台驻留 | ✅ | 「关窗隐藏」由 windows.ts 的 `close` 处理；本模块提供托盘「退出」真正退出入口 |
+| 生命周期宪法 · 关窗退出 | ✅ | 关窗即退出由入口模块处理；本模块提供托盘「退出」等效退出入口 |
 | 生命周期宪法 · 优雅关闭 | ✅ | `before-quit` 中调用 `destroyTray()` 释放托盘（index.ts:73-78） |
 | 代码质量 · TypeScript strict / 无 as any | ✅ | 全程显式类型，无 `as any` / `@ts-ignore` |
 | 代码质量 · 无空 catch | ✅ | 无 catch 块 |
@@ -58,7 +58,7 @@ tray = null ──createTray(mainWindow)──▶ tray = Tray 实例（驻留）
 tray = Tray 实例 ──destroyTray()──────▶ tray = null（应用退出）
 ```
 
-> 与窗口生命周期的协作：`quitting` 标志（windows.ts 模块级）区分「关窗隐藏」与「真正退出」；托盘「退出」→ `app.quit()` → `before-quit` → `setQuitting(true)` → `destroyTray()`。
+> 与窗口生命周期的协作：关窗即退出由入口模块的 `window-all-closed` 触发；托盘「退出」→ `app.quit()` → `before-quit` → `destroyTray()`（与关窗退出等效）。
 
 ## 5. 接口契约
 

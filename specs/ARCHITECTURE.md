@@ -32,7 +32,7 @@
 | 桌面壳（主进程） | `src/main/index.ts` | 单实例锁、启动编排、生命周期 |
 | | `src/main/host.ts` | runProfile → Host 句柄（ctx/shutdown/port/url） |
 | | `src/main/windows.ts` | BrowserWindow 创建、loadURL、无边框、安全加固 |
-| | `src/main/tray.ts` / `notifications.ts` | 托盘驻留、原生通知 |
+| | `src/main/tray.ts` / `notifications.ts` | 系统托盘（退出/唤回）、原生通知 |
 | | `src/main/lifecycle.ts` | NO_PROXY/CA、崩溃兜底 |
 | 薄 IPC（preload） | `src/preload/index.ts` | contextBridge 暴露 `window.dsh`（窗口控制） |
 | 渲染进程 | `index.html`（兜底页） | host 就绪前/失败时的占位；实际内容由 dsh 提供 |

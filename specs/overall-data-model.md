@@ -49,11 +49,8 @@
 ```
 created → (loadURL localhost / 兜底页) → ready-to-show → shown
                                           ↓
-                        close（非退出）→ hidden（托盘驻留）
-                        close（退出）  → closed → 应用退出
+                        close → closed → window-all-closed → app.quit（关窗即退出）
 ```
-
-状态标志：`quitting`（windows.ts 模块级）——区分「关窗隐藏」与「真正退出」。
 
 ### 2.2 Host 启动状态
 

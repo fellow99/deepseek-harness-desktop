@@ -38,7 +38,7 @@
 - **`ipcRenderer.invoke` + `ipcMain.handle` 配对**：异步请求-响应，返回 Promise，与主进程 `registerWindowIpcHandlers`（windows.ts）一一对应。
 - **为什么数据面不过 IPC**：dsh 的 `WebApiClient` 已实现同源 `fetch('/api')` 上行 + `WebSocket('/api/events.*')` 下行，复用即可；走 IPC 需新写载体插件，违背「零上游改动」。
 - **观察到的命名/行为细节**：`window.dsh.maximize()` 对应主进程 handler 的「切换」语义（`isMaximized ? unmaximize : maximize`），即方法名为 `maximize` 但实际是 toggle；查询实际状态用 `isMaximized()`。此为源码实际行为（对应 FR-006-003）。
-- **`close` 的连带行为**：`window.dsh.close()` 触发窗口 `close` 事件；因主进程后台驻留逻辑（非退出状态下 `preventDefault + hide`），该操作实际表现为「隐藏到托盘」而非销毁窗口（行为归属窗口模块，preload 仅触发）。
+- **`close` 的连带行为**：`window.dsh.close()` 触发窗口 `close` 事件，关窗即退出（由入口模块的 `window-all-closed` 触发应用退出，行为归属窗口/入口模块，preload 仅触发）。
 
 ## 4. 数据模型
 
@@ -52,7 +52,7 @@ export type DshApi = typeof api; // { minimize; maximize; close; isMaximized }
 |---|---|---|
 | `minimize` | `Promise<void>` | 最小化窗口 |
 | `maximize` | `Promise<void>` | 切换最大化 / 还原 |
-| `close` | `Promise<void>` | 触发窗口关闭（受主进程后台驻留逻辑约束） |
+| `close` | `Promise<void>` | 触发窗口关闭（关窗即退出） |
 | `isMaximized` | `Promise<boolean>` | 查询最大化状态 |
 
 ### 4.2 IPC 通道映射

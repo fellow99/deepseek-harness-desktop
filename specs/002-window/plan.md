@@ -30,7 +30,7 @@
 | 安全：权限白名单 | ✅ | `clipboard-sanitized-write` + `notifications`，且受信来源 + 对应 webContents 三条件（FR-002-009） |
 | IPC：薄 IPC / 数据面不过 IPC | ✅ | 仅 `window:minimize/maximize/close/is-maximized`（FR-002-010） |
 | IPC：preload 最小暴露 | ✅ | preload 仅暴露上述 4 个方法（`window.dsh`），无 Node 能力 |
-| 生命周期：后台驻留 | ✅ | close 事件 `preventDefault` + `hide`，退出标志放行（FR-002-011/012） |
+| 生命周期：关窗退出 | ✅ | close 事件放行，由入口模块触发退出（FR-002-011） |
 | 代码质量：TypeScript strict / 无 as any | ✅ | 无 `as any`；仅用 `as const`（字面量类型断言，合法） |
 | 代码质量：严禁空 catch | ✅ | `isTrustedOrigin` 的 `catch` 返回 false（显式降级），无空 catch |
 
@@ -49,7 +49,7 @@
 | `setWindowOpenHandler` 一律 `deny` + 外部走 shell | 任何 `window.open` 都不在应用内开新窗口，外部地址交系统浏览器 |
 | `will-navigate` 仅放行受信来源 | 阻止渲染层被劫持导航到恶意地址 |
 | 权限三条件（白名单权限 + 受信来源 + 对应 webContents） | 防止其它 webContents / 非受信来源滥用权限 |
-| 关窗 `preventDefault` + `hide`（`quitting` 标志放行） | 后台驻留；退出流程由 `setQuitting(true)` 放行（FR-002-011/012） |
+| 关窗放行（不拦截 close） | 关窗即退出；由入口模块的 `window-all-closed` 触发应用退出（FR-002-011） |
 
 ### 3.2 受信来源判定（`isTrustedOrigin`）
 
@@ -70,7 +70,6 @@ url 非空            → loadURL(url)          // 宿主 localhost（FR-002-003
 ### 4.1 实体与状态
 
 - `RENDERER_PERMISSIONS = new Set(['clipboard-sanitized-write', 'notifications'])`：模块级常量（FR-002-009）。
-- `let quitting = false`：模块级状态标志（FR-002-011/012），经 `setQuitting(value)` 切换。
 
 ### 4.2 状态机（窗口生命周期）
 
@@ -79,8 +78,7 @@ created（show:false）
   → loadURL(localhost) / loadURL(dev) / loadFile(兜底页)
   → ready-to-show → shown
                         ↓
-  close（quitting=false）→ hidden（托盘驻留）
-  close（quitting=true） → closed → 应用退出
+  close → closed → window-all-closed → 应用退出（关窗即退出）
 ```
 
 ### 4.3 校验规则
@@ -94,7 +92,6 @@ created（show:false）
 
 | 导出 | 签名 | 说明 |
 |------|------|------|
-| `setQuitting(value: boolean)` | `void` | 切换「真正退出」标志 |
 | `registerWindowIpcHandlers()` | `void` | 注册窗口控制 IPC（min/max/close/is-maximized） |
 | `createMainWindow(url: string \| null)` | `BrowserWindow` | 创建并加载主窗口，返回实例 |
 
@@ -112,7 +109,7 @@ created（show:false）
 |------|------|------|------|
 | `window:minimize` | 渲染 → 主（invoke） | — | void |
 | `window:maximize` | 渲染 → 主（invoke） | — | void（切换最大化/还原） |
-| `window:close` | 渲染 → 主（invoke） | — | void（走 close 事件，受 quitting 控制） |
+| `window:close` | 渲染 → 主（invoke） | — | void（触发 close 事件，关窗即退出） |
 | `window:is-maximized` | 渲染 → 主（invoke） | — | boolean |
 
 > 渲染层经 preload `contextBridge.exposeInMainWorld('dsh', api)` 调用（`window.dsh.minimize()` 等）。
@@ -123,7 +120,7 @@ created（show:false）
 |------|------|
 | `setWindowOpenHandler` | 新窗口请求一律 deny + 外部走 shell |
 | `will-navigate` | 导航加固 |
-| `close` | 后台驻留（quitting=false → hide） |
+| `close` | 放行关闭（关窗即退出） |
 | `did-fail-load` | 记录加载失败（`console.error`） |
 | `ready-to-show` | 就绪后再显示 |
 
@@ -131,7 +128,7 @@ created（show:false）
 
 ### 6.1 架构模式
 
-**工厂函数 + 模块级状态**：`createMainWindow` 为窗口工厂；`quitting` 为模块级标志；IPC 注册为独立函数（由 `index.ts` 在 `whenReady` 后调用一次）。
+**工厂函数**：`createMainWindow` 为窗口工厂；IPC 注册为独立函数（由 `index.ts` 在 `whenReady` 后调用一次）。
 
 ### 6.2 关键算法
 
@@ -153,8 +150,8 @@ created（show:false）
 ## 7. 测试考虑
 
 - **类型检查**：`npm run typecheck`（基本质量门）。
-- **单元**：`isTrustedOrigin` 对回环 / 非回环 / 异常 URL 的判定；`setQuitting` 状态切换。
-- **集成/e2e**：窗口加载 localhost / 兜底页；关窗隐藏 vs 退出；外部链接走系统浏览器。
+- **单元**：`isTrustedOrigin` 对回环 / 非回环 / 异常 URL 的判定。
+- **集成/e2e**：窗口加载 localhost / 兜底页；关窗即退出；外部链接走系统浏览器。
 - **边界**：`maximize` 的往返切换；`will-navigate` 对受信来源的放行；权限申请中 `wc.id` 不匹配时拒绝。
 - `[NEEDS CLARIFICATION]`：`titleBarOverlay.height = 40` 与渲染层自绘标题栏高度的视觉对齐，需在真实 Windows 环境实测确认。
 
@@ -162,7 +159,7 @@ created（show:false）
 
 | 文件 | 用途 | 行数 |
 |------|------|------|
-| `src/main/windows.ts` | 主窗口创建 + 安全加固 + 无边框标题栏 + 窗口控制 IPC + 后台驻留 | 136 |
+| `src/main/windows.ts` | 主窗口创建 + 安全加固 + 无边框标题栏 + 窗口控制 IPC + 关窗即退出 | 136 |
 
 > 协作方（非本模块）：`src/preload/index.ts`（暴露 `window.dsh`，21 行）、`src/main/index.ts`（编排，79 行）。
 
@@ -180,7 +177,6 @@ created（show:false）
 | FR-002-008（新窗口一律 deny） | `setWindowOpenHandler`（windows.ts:93-96） |
 | FR-002-009（权限白名单三条件） | `setPermissionRequestHandler`（windows.ts:105-111） |
 | FR-002-010（窗口控制 IPC） | `registerWindowIpcHandlers`（windows.ts:42-58） |
-| FR-002-011（关窗隐藏） | `close` 事件（windows.ts:114-119） |
-| FR-002-012（退出标志） | `setQuitting`（windows.ts:20-22） |
+| FR-002-011（关窗退出） | close 放行（windows.ts，无拦截逻辑） |
 | FR-002-013（就绪后显示） | `ready-to-show`（windows.ts:134） |
 | FR-002-014（加载失败记录） | `did-fail-load`（windows.ts:121-123） |

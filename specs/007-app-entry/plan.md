@@ -21,7 +21,7 @@
 | electron-squirrel-startup | `^1.0.1` | 识别 Squirrel.Windows 安装/卸载短生命周期，返回真时退出 |
 | `./lifecycle`（内部） | — | `setupSystemCertificates` / `ensureLoopbackNoProxy` / `installCrashHandlers` |
 | `./host`（内部） | — | `startHost`、`HostHandle` 类型 |
-| `./windows`（内部） | — | `createMainWindow` / `registerWindowIpcHandlers` / `setQuitting` |
+| `./windows`（内部） | — | `createMainWindow` / `registerWindowIpcHandlers` |
 | `./tray`（内部） | — | `createTray` / `destroyTray` |
 | `./notifications`（内部） | — | `setupNotifications` |
 
@@ -34,8 +34,8 @@
 | 只写装配代码 | ✅ | 入口仅按序调用各模块，不含能力实现 |
 | 同源数据面 | ✅ | 通过 `host.url`（`http://127.0.0.1:<port>/`）交给窗口模块加载 |
 | 单实例锁 | ✅ | `app.requestSingleInstanceLock()`，失败即 `app.quit()`（实现 FR-007-001） |
-| 后台驻留 | ✅ | `window-all-closed` 显式 no-op（实现 FR-007-011） |
-| 优雅关闭 | ✅ | `before-quit` → `setQuitting(true)` + `host?.shutdown()` + `destroyTray()`（实现 FR-007-012） |
+| 关窗退出 | ✅ | `window-all-closed` → `app.quit()`（实现 FR-007-011） |
+| 优雅关闭 | ✅ | `before-quit` → `host?.shutdown()` + `destroyTray()`（实现 FR-007-012） |
 | TypeScript strict / 无 as any | ✅ | 无类型压制；electron-squirrel-startup 以静态 import 引入（类型声明于 src/electron-squirrel-startup.d.ts） |
 | 严禁空 catch | ✅ | 入口无 try/catch |
 
@@ -56,11 +56,7 @@
 | `mainWindow` | `BrowserWindow \| null` | 主窗口引用，初始 null |
 | `host` | `HostHandle \| null` | 宿主句柄，初始 null；`startHost()` 返回 |
 
-跨模块状态（经 `windows.ts` 的 `setQuitting` 维护）：
-
-| 状态 | 写入点 | 读取点 |
-|---|---|---|
-| `quitting`（退出标志） | `before-quit` → `setQuitting(true)` | `windows.ts` 的 `close` 事件（区分隐藏/退出） |
+（无跨模块退出标志——关窗即退出，`window-all-closed` 触发 `app.quit()`）
 
 状态迁移：
 
@@ -71,7 +67,7 @@
                                  → host = startHost()（null 或 句柄）
                                  → mainWindow = createMainWindow(host?.url)
                                  → (host 非空) createTray + setupNotifications
-                                 → 运行中 → before-quit → quitting=true + host.shutdown + destroyTray
+                                 → 运行中 → window-all-closed → app.quit → before-quit → host.shutdown + destroyTray
 ```
 
 ## 5. Interface Contracts
@@ -90,7 +86,6 @@
 | `startHost` | `./host` | `(): Promise<HostHandle \| null>` |
 | `createMainWindow` | `./windows` | `(url: string \| null): BrowserWindow` |
 | `registerWindowIpcHandlers` | `./windows` | `(): void` |
-| `setQuitting` | `./windows` | `(value: boolean): void` |
 | `createTray` | `./tray` | `(mainWindow: BrowserWindow): Tray` |
 | `destroyTray` | `./tray` | `(): void` |
 | `setupNotifications` | `./notifications` | `(ctx: HostContext): void` |
@@ -102,8 +97,8 @@
 |---|---|---|
 | `second-instance` | electron app | 还原/显示/聚焦主窗口（FR-007-002） |
 | `activate` | electron app | 无窗口时重建主窗口（FR-007-010） |
-| `window-all-closed` | electron app | no-op，后台驻留（FR-007-011） |
-| `before-quit` | electron app | `setQuitting(true)` + `host?.shutdown()` + `destroyTray()`（FR-007-012） |
+| `window-all-closed` | electron app | `app.quit()`，关窗即退出（FR-007-011） |
+| `before-quit` | electron app | `host?.shutdown()` + `destroyTray()`（FR-007-012） |
 
 ## 6. Implementation Strategy
 
@@ -134,7 +129,7 @@
   - 单实例：锁失败 → 不调用任何启动函数；锁成功 + `second-instance` → 聚焦现有窗口。
   - 编排顺序：whenReady 后调用次序为 `setAppUserModelId → registerWindowIpcHandlers → startHost → createMainWindow → createTray → setupNotifications`。
   - 宿主不可用：`startHost` 返回 null → `createMainWindow(null)` 被调用，`createTray`/`setupNotifications` 不被调用。
-  - 优雅关闭：`before-quit` → `setQuitting(true)` 且 `host.shutdown()` 与 `destroyTray()` 被调用。
+  - 优雅关闭：`before-quit` → `host.shutdown()` 与 `destroyTray()` 被调用。
 - **边界场景**：`activate` 在已有窗口时不应重建；`second-instance` 在主窗口为 null（极早退出竞态）时不应抛错。
 
 ## 8. File Inventory

@@ -33,7 +33,7 @@
 
 ## 5. 生命周期宪法
 
-1. **后台驻留**：关窗 = 隐藏到托盘，`window-all-closed` 不退出；真正退出走托盘「退出」。
+1. **关窗即退出**：主窗口关闭 → `window-all-closed` → `app.quit()`，经 `before-quit` 优雅关闭 dsh Host 后退出进程（托盘「退出」为等效退出通道）。
 2. **优雅关闭**：退出时 `shutdown.shutdown()` dispose 插件树。
 3. **崩溃兜底**：`uncaughtException` / `unhandledRejection` 记录，防止静默崩溃（MVP 已知代价：harness 在主进程 = 应用级崩溃）。
 

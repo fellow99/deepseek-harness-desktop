@@ -44,7 +44,7 @@ deepseek-harness-desktop/
     │   ├── index.ts          # 单实例锁 → 启动 host → 建窗 → 托盘/通知/生命周期编排
     │   ├── host.ts           # runProfile('desktop') → { ctx, shutdown }；就绪判定（已消费 dsh）
     │   ├── windows.ts        # BrowserWindow 创建、loadURL(localhost)、无边框/安全
-    │   ├── tray.ts           # 系统托盘 + 后台驻留
+    │   ├── tray.ts           # 系统托盘（退出/唤回）
     │   ├── notifications.ts  # 订阅 ctx session/event → 原生通知
     │   └── lifecycle.ts      # NO_PROXY/CA、崩溃兜底
     ├── preload/

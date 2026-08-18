@@ -22,7 +22,7 @@
 | 安全基线 | ✅ | sandbox/contextIsolation/无 nodeIntegration（windows.ts） |
 | 薄 IPC | ✅ | 仅窗口控制，`contextBridge` 暴露 `window.dsh` |
 | TypeScript strict / 无 as any | ✅ | 脚手架 typecheck 通过（EXIT 0） |
-| 后台驻留 / 优雅关闭 | ✅ | close 隐藏 + `shutdown.shutdown()` |
+| 关窗退出 / 优雅关闭 | ✅ | `window-all-closed` → `app.quit()` + `shutdown.shutdown()` |
 
 ## 3. 实现策略概述
 
@@ -53,7 +53,7 @@
 
 ### 3.4 托盘与通知（tray.ts / notifications.ts）
 
-- 托盘：`Tray` + 菜单（显示/退出）；关窗 `preventDefault` + hide 实现后台驻留。
+- 托盘：`Tray` + 菜单（显示/退出）；关窗即退出由入口模块的 `window-all-closed` 触发。
 - 通知：`ctx.on('session/event')` 过滤 `turn/end`（completed/error）与 `approval/asked`；`agent/error` 兜底。
 
 ## 4. 横切关注点
@@ -89,8 +89,15 @@
 - **本地打包**：`npm run make`（Forge makers：squirrel/zip/deb/rpm）。
 - **宿主产物**：dsh 的 lib host/client + web dist 随包打入 resources（消费 dsh 时）。
 - **ABI**：MVP 裁掉 dsh native 沙箱（landlock），规避 Electron Node ABI 不一致。
-- **上游补丁（patches 机制）**：dsh 的 loader 依赖 Node 内部 API（`--expose-internals` /
-  `node-addon-require-builtin`，Electron 下均不可用），HMR 服务无法工作。通过
-  `patches/dsh-disable-hmr.patch`（给 `runProfile` 加 `DSH_DISABLE_HMR` 开关）禁用，
-  `npm run build:dsh`（`scripts/build-dsh.mjs`）自动 `git apply`（幂等，`--reverse --check`
-  检测已应用则跳过），dsh 升级后重新 apply。详见 README「开发」章节。
+- **上游补丁（patches 机制）**：dsh 的 loader 通过 `node-addon-require-builtin` 原生模块
+  获取 Node 内部 ESM loader（internal import），该模块依赖 Electron V8 缺失的
+  `GetAlignedPointerFromEmbedderData` 符号（Electron 的 V8 为 `-electron` 分支）而失效；
+  `--expose-internals` 在 Electron GUI 模式又不进入 `execArgv`。故 dsh 依赖 Node 内部 API
+  的能力（HMR、原生目录对话框）在 Electron 下均不可用。`npm run build:dsh`
+  （`scripts/build-dsh.mjs`）自动 `git apply` 两个补丁（幂等，`--reverse --check` 检测）：
+  1. `patches/dsh-disable-hmr.patch` —— 给 `runProfile` 加 `DSH_DISABLE_HMR` 开关，跳过
+     watch-only HMR 挂载。
+  2. `patches/dsh-disable-native-picker.patch` —— 让 directory-picker 在 Electron 下强制
+     用 browse（内置目录浏览，走 host.listDirectory），规避原生对话框 worker 用
+     electron.exe 启动失败；符合产品文档「不做原生目录选择器」。
+  dsh 升级后重新 apply。详见 README「开发」章节。

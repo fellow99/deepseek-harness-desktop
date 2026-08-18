@@ -53,3 +53,21 @@
 - **平台**：Windows + Linux（macOS 后续考虑）。
 - **Node**：Electron 43 内置（≥ Node 24，支持 `node:tls` 的 `getCACertificates`/`setDefaultCACertificates`）。
 - **包管理器**：npm（脚手架）；dsh 构建内部用 pnpm。
+
+## 5. Electron 兼容性
+
+Electron 与 dsh 存在三类兼容差异，均已处理：
+
+1. **Node 内部 API 不可用**：dsh 的 loader（cordis-plugin-loader）通过 `node-addon-require-builtin`
+   原生模块获取 Node 内部 ESM loader（internal import）。该模块依赖 Electron V8 缺失的
+   `GetAlignedPointerFromEmbedderData` 符号（Electron 的 V8 为 `-electron` 分支）而在 Electron
+   下加载失败；`--expose-internals` 在 GUI 模式又不进入 `execArgv`。后果与对策：
+   - loader 回退默认 ESM import → host.ts 的 `ensureWorkspaceLinks` 把 workspace 包链接到
+     根 node_modules（开发模式）；打包模式由 collect-dsh 物化为扁平真实文件。
+   - HMR 服务无法工作 → `patches/dsh-disable-hmr.patch`（`DSH_DISABLE_HMR` 开关）。
+   - 原生目录对话框 worker 用 electron.exe 启动失败 → `patches/dsh-disable-native-picker.patch`
+     （Electron 下强制用 browse 内置目录浏览）。
+2. **原生模块 ABI 不一致**：Electron 43 的 Node ABI 为 148（系统 Node 为 137）。dsh 的
+   landlock 原生模块（native/landlock-run）为 Linux 专属、MVP 已裁掉（产品文档第 14 节）。
+3. **tsdown 构建产物 hash 残留**：dsh 每次 build 生成新 hash 产物、旧产物残留，host.ts 按
+   mtime 选最新薄入口。
