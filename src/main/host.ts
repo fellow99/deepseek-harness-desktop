@@ -18,12 +18,24 @@ import { inspect } from 'node:util';
  * - `$DSH_HOME`：环境变量 `DSH_HOME`，默认 `~/.dsh`（dsh-home-paths）
  */
 
-// dsh 编译产物位置：desktop 与 dsh 同级目录（../deepseek-harness）
-const DSH_ROOT = resolve(__dirname, '../../../deepseek-harness');
-const DSH_CLI_LIB = join(DSH_ROOT, 'apps/cli/lib');
-const DSH_APP_BOOT_LIB = join(DSH_ROOT, 'packages/boot/app-boot/lib/index.js');
-// desktop 工程自带的 desktop profile（开发模式相对路径）
-const DESKTOP_PROFILE_SRC = resolve(__dirname, '../../profiles/desktop');
+// dsh 部署产物位置：
+// - 开发：与 desktop 同级目录的 deepseek-harness 源码（workspace 链接解析）
+// - 打包：out/resources/dsh-dist（collect-dsh 的 pnpm deploy 物化产物，extraResource 打入）
+const DSH_ROOT = app.isPackaged
+  ? join(process.resourcesPath, 'dsh-dist')
+  : resolve(__dirname, '../../../deepseek-harness');
+// profile-boot 产物目录（apps/cli 的 lib；deploy 物化后即 dsh-dist/lib）
+const DSH_CLI_LIB = app.isPackaged
+  ? join(DSH_ROOT, 'lib')
+  : join(DSH_ROOT, 'apps/cli/lib');
+// loadLayeredEnv（dsh-app-boot 的 lib）
+const DSH_APP_BOOT_LIB = app.isPackaged
+  ? join(DSH_ROOT, 'node_modules/@deepseek-ai/dsh-app-boot/lib/index.js')
+  : join(DSH_ROOT, 'packages/boot/app-boot/lib/index.js');
+// desktop 工程自带的 desktop profile（collect 时物化进 dsh-dist/profiles/desktop）
+const DESKTOP_PROFILE_SRC = app.isPackaged
+  ? join(DSH_ROOT, 'profiles/desktop')
+  : resolve(__dirname, '../../profiles/desktop');
 
 /** dsh Cordis Context 的最小接口（仅暴露桌面侧订阅事件所需的字段） */
 export interface HostContext {
@@ -164,7 +176,11 @@ export async function startHost(): Promise<HostHandle | null> {
     process.env.DSH_HOME = join(app.getPath('userData'), '.dsh');
   }
   ensureDesktopProfile(process.env.DSH_HOME);
-  ensureWorkspaceLinks();
+  // 开发模式需把 dsh workspace 包链接到根 node_modules（loader 默认 ESM import 解析）；
+  // 打包后 dsh-dist 的 node_modules 已由 pnpm deploy 物化为扁平真实文件，无需链接。
+  if (!app.isPackaged) {
+    ensureWorkspaceLinks();
+  }
   // dsh 的 HMR 依赖 Node 内部 API（--expose-internals / node-addon-require-builtin），
   // Electron 下不可用，禁用之（生产桌面壳无需用户 patch 热重载）。
   process.env.DSH_DISABLE_HMR = '1';

@@ -10,6 +10,10 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    // dsh 部署产物（dsh-dist/）打进 out/resources/dsh-dist（asar 外，供 host.ts 的
+    // ESM 动态 import；含 dsh lib + node_modules + web dist + desktop profile）。
+    // 注：@electron/packager 18.x 的 extraResource 仅支持字符串（复制到 resources/<basename>）。
+    extraResource: ['dsh-dist'],
   },
   rebuildConfig: {},
   makers: [

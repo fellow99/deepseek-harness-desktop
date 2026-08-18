@@ -27,6 +27,8 @@ yarn-error.log*
 /dist
 /.vite
 /out
+/dsh-dist
+/dsh-dist-tmp
 
 .sisyphus
 .opencode
