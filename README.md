@@ -57,55 +57,83 @@ DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体�
 
 ## 开发
 
-### 消费 dsh（源码引用）
+### 集成方式
 
-dsh 与本工程同级目录、源码引用，开发前需先构建 dsh（一条命令，含 Electron 兼容 patch 自动 apply）：
+- **源码引用**：dsh 与本工程同级目录（`../deepseek-harness`，非 submodule），消费其编译产物。
+- **Host 集成**：`src/main/host.ts` 动态 import dsh 的 `runProfile`（apps/cli 编译产物），
+  主进程内挂起 dsh Host（webserver 绑定 `127.0.0.1:<空闲端口>`），返回
+  `{ ctx, shutdown, port, url }` 句柄。
+- **同源数据面**：渲染进程 `loadURL(http://127.0.0.1:<port>/)` 同源加载 dsh Web UI，复用
+  `WebApiClient`（HTTP 上行 + WebSocket 下行），零 CORS、零鉴权、零新载体。
+- **desktop profile**：`profiles/desktop/`（`dsh.profile.bundles = [dsh-base, dsh-web-app]`，
+  cordis.patch.yml 覆盖 `web-runtime.printUrl: false`），运行时复制到
+  `$DSH_HOME/profiles/desktop`。
+
+### 编译过程（含 patches）
+
+dsh 依赖 Node 内部 API（HMR、原生目录对话框），Electron 下不可用，需打两个补丁后构建。
+一条命令完成（幂等，`--reverse --check` 检测已应用则跳过）：
 
 ```bash
-npm run build:dsh   # apply patches/ 补丁 + 安装依赖 + 构建 lib host/client + web dist
+npm run build:dsh   # ① git apply patches/ 两个补丁 → ② pnpm install（node_modules 缺失时）→ ③ build:lib:host + build:lib:client + build:web
 ```
 
-### Electron 兼容处理
+| 补丁 | 作用 |
+|---|---|
+| `patches/dsh-disable-hmr.patch` | 给 `runProfile` 加 `DSH_DISABLE_HMR` 开关，跳过 watch-only HMR（HMR 依赖 `--expose-internals`）|
+| `patches/dsh-disable-native-picker.patch` | 让 directory-picker 在 Electron 下强制用 browse（原生对话框 worker 用 electron.exe 启动失败）|
 
-dsh 的 loader 通过 `node-addon-require-builtin` 原生模块（依赖 Electron V8 缺失的
-`GetAlignedPointerFromEmbedderData` 符号）或 `--expose-internals` 获取 Node 内部 API，
-两者在 Electron 下均不可用。`src/main/host.ts` 做了如下兼容：
-
-1. **workspace 包链接**：loader 回退默认 ESM import，需把 dsh workspace 包链接到其根
-   node_modules（`ensureWorkspaceLinks`）。
-2. **禁用 HMR**：`cordis-plugin-hmr` 依赖 Node 内部 API，Electron 下无法工作，设
-   `DSH_DISABLE_HMR=1` 跳过 runProfile 的 watch-only HMR 挂载。该开关由
-   `patches/dsh-disable-hmr.patch` 提供，`build:dsh` 脚本自动 apply 到 dsh 源码
-   （详见 specs 的 patches 机制说明）。
+> Electron 兼容根因：dsh 的 loader 经 `node-addon-require-builtin` 原生模块获取 Node 内部
+> ESM loader，该模块依赖 Electron V8 缺失的 `GetAlignedPointerFromEmbedderData` 符号而失效；
+> 开发模式下 loader 回退默认 ESM import，由 `host.ts` 的 `ensureWorkspaceLinks` 把 workspace
+> 包链接到 dsh 根 node_modules 解决。
 
 ### 启动 / 打包
 
 ```bash
 npm install
 npm start          # 开发模式：Vite 构建 + 启动 Electron，主进程挂起 dsh Host 并加载其 Web UI
-npm run package    # 打包：out/DeepSeek Harness Desktop-win32-x64/
+npm run package    # 打包：prepackage 自动 collect（pnpm deploy 物化 dsh 产物到 dsh-dist/，extraResource 打进 resources/dsh-dist）
 ```
 
-> 打包目前仅含桌面壳；dsh 构建产物（lib host/client + web dist）打进 resources 属后续步骤。
+> 打包产物 `out/DeepSeek Harness Desktop-win32-x64/` 已含 dsh（lib + node_modules + web dist + profile），exe 可直接运行 dsh。
 
-## 目录结构（规划）
+## 目录结构
+
+本工程与 deepseek-harness（dsh）**同级目录**（非 submodule），经源码引用集成：
 
 ```
-deepseek-harness-desktop/
-├── docs/                      # 产品概念设计、后续规格文档
-├── profiles/desktop/          # 自定义 desktop profile（dsh.profile + cordis.patch.yml）
-├── src/
-│   ├── main/                  # Electron 主进程（= dsh Host 宿主）
-│   │   ├── index.ts           # 单实例锁 → runProfile → 建窗 → 托盘/生命周期
-│   │   ├── host.ts            # runProfile('desktop') → { ctx, shutdown }；就绪判定
-│   │   ├── windows.ts         # BrowserWindow、loadURL(localhost)、无边框/titleBarOverlay、安全
-│   │   ├── tray.ts            # 系统托盘（退出/唤回）
-│   │   ├── notifications.ts   # 订阅 ctx session/event → 原生通知
-│   │   └── lifecycle.ts       # NO_PROXY/CA、崩溃兜底、优雅关闭
-│   ├── preload/index.ts       # contextBridge：window.dsh（薄 IPC）
-│   └── renderer/index.html    # 极薄：loadURL 到 localhost
-├── forge.config.ts            # Electron Forge 配置
-└── resources/                 # 应用图标、托盘图标
+（同级目录）
+├── deepseek-harness-desktop/      # 本工程（Electron 桌面壳）
+│   ├── docs/                      # 产品概念设计
+│   ├── specs/                     # 规范文档（as-built，索引见 specs/README.md）
+│   ├── patches/                   # dsh 上游补丁（git apply，build:dsh 自动应用）
+│   │   ├── dsh-disable-hmr.patch
+│   │   └── dsh-disable-native-picker.patch
+│   ├── scripts/                   # 构建脚本
+│   │   ├── build-dsh.mjs          # apply patches + 安装依赖 + 构建 dsh 产物
+│   │   └── collect-dsh.mjs        # 收集 dsh 产物到 dsh-dist/（pnpm deploy + 物化）
+│   ├── profiles/desktop/          # 自定义 desktop profile（dsh.profile.bundles + cordis.patch.yml）
+│   ├── src/
+│   │   ├── main/                  # Electron 主进程（= dsh Host 宿主）
+│   │   │   ├── index.ts           # 单实例锁 → 启动 host → 建窗 → 托盘/通知/生命周期
+│   │   │   ├── host.ts            # runProfile('desktop') → { ctx, shutdown }；就绪判定
+│   │   │   ├── windows.ts         # BrowserWindow、loadURL(localhost)、无边框/安全
+│   │   │   ├── tray.ts            # 系统托盘（退出/唤回）
+│   │   │   ├── notifications.ts   # 订阅 ctx session/event → 原生通知
+│   │   │   └── lifecycle.ts       # NO_PROXY/CA、崩溃兜底
+│   │   ├── preload/index.ts       # contextBridge：window.dsh（薄 IPC）
+│   │   └── renderer/renderer.ts   # 极薄渲染入口（兜底加载页）
+│   ├── forge.config.ts            # Electron Forge 配置（extraResource 打进 resources/dsh-dist）
+│   ├── vite.*.config.ts           # Vite 配置（main/preload/renderer）
+│   ├── index.html                 # 渲染入口（Forge Vite 约定在项目根）
+│   └── resources/                 # 应用图标、托盘图标
+│
+└── deepseek-harness/              # 被封装宿主（dsh，源码引用，非 submodule）
+    ├── apps/                      # cli（dsh bin，profile-boot）、web（Web 前端，build:web 产出 dist）
+    ├── packages/                  # host / client / core / session 等 workspace 包
+    ├── vendor/                    # vendored cordis 框架包（cordis / loader / hmr 等）
+    └── native/                    # landlock-run 原生模块（Linux 沙箱，MVP 已裁掉）
 ```
 
 ## 相关文档
