@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dsh_ref:
+        description: 'dsh checkout ref（tag / branch / commit）'
+        required: false
+        default: 'dsh-v0.1.0-rc.7'
+      version:
+        description: 'Release tag（例如 v0.1.0，仅手动触发时需填写）'
+        required: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 本工程经 ../deepseek-harness 同级源码引用 dsh（非 submodule），
+      # 用第二次 checkout 复现与本机一致的 sibling 布局。
+      - name: Checkout dsh (sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          path: ../deepseek-harness
+          ref: ${{ github.event.inputs.dsh_ref || 'dsh-v0.1.0-rc.7' }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # pnpm 官方推荐（已弃用 corepack）；dsh 是 pnpm monorepo，collect-dsh 需 pnpm deploy。
+      - uses: pnpm/setup@v2
+        with:
+          version: 11.7.0
+
+      # maker-deb 需 fakeroot + dpkg（dpkg 已预装）；maker-rpm 需 rpmbuild（rpm 包提供）。
+      - name: Install Linux packaging deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y --no-install-recommends fakeroot rpm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build dsh (apply patches + build)
+        run: npm run build:dsh
+
+      - name: Make
+        run: npm run make
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}
+          path: out/make/
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # upload-artifact v4 解压后文件执行权限会丢失（归 644/755）。
+      - name: Restore exec permissions
+        run: chmod -R +x artifacts 2>/dev/null || true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+          files: |
+            artifacts/**/*.exe
+            artifacts/**/*.nupkg
+            artifacts/**/*.deb
+            artifacts/**/*.rpm
+            artifacts/**/*.dmg
+            artifacts/**/*.zip
+          fail_on_unmatched_files: false
+          generate_release_notes: true
