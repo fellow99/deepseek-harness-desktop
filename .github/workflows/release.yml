@@ -40,7 +40,10 @@ jobs:
           node-version: 22
           cache: npm
 
-      # dsh 脚本内部用 `corepack pnpm` 调用 pnpm（corepack 由 Node 22 自带），无需额外安装 pnpm。
+      # dsh 脚本用 `corepack pnpm`，且 dsh 的 build 脚本内部还有嵌套的 `pnpm` 调用，
+      # 需 corepack enable 创建 pnpm shim 到 PATH，否则嵌套调用报 `pnpm: not found`。
+      - name: Enable corepack
+        run: corepack enable
 
       # maker-deb 需 fakeroot + dpkg（dpkg 已预装）；maker-rpm 需 rpmbuild（rpm 包提供）。
       - name: Install Linux packaging deps

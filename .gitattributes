@@ -1,0 +1,4 @@
+# patch 文件强制 LF：git apply 要求 patch 与 dsh 源码换行一致。
+# dsh 仓库的 .gitattributes 强制 eol=lf；若本仓库在 Windows（autocrlf=true）
+# checkout 时把 patch 转成 CRLF，会导致 git apply 报 "patch does not apply"。
+*.patch text eol=lf
