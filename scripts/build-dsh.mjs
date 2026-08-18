@@ -6,13 +6,21 @@
  * 前置：dsh 与本工程同级目录（../deepseek-harness），git 仓库。
  */
 import { execSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, rmSync } from 'node:fs';
+import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const desktopRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const dshRoot = resolve(desktopRoot, '../deepseek-harness');
-const patchFile = resolve(desktopRoot, 'patches/dsh-disable-hmr.patch');
+const patchFiles = [
+  resolve(desktopRoot, 'patches/dsh-disable-hmr.patch'),
+  resolve(desktopRoot, 'patches/dsh-disable-native-picker.patch'),
+];
+
+// pnpm/tsdown 在无 TTY 时中止模块重建与依赖检查，故设 CI 使其自动处理
+process.env.CI = process.env.CI ?? 'true';
+process.env.npm_config_confirm_modules_purge = 'false';
+process.env.COREPACK_ENABLE_DOWNLOAD_PROMPT = '0';
 
 function run(cmd, cwd) {
   console.log(`\n> ${cmd}`);
@@ -34,21 +42,31 @@ if (!existsSync(dshRoot)) {
   console.error(`[build-dsh] dsh 未找到: ${dshRoot}`);
   process.exit(1);
 }
-if (!existsSync(patchFile)) {
-  console.error(`[build-dsh] patch 未找到: ${patchFile}`);
-  process.exit(1);
+
+// 0.5 清理 vendor 残留（collect/deploy 历史错误产物，会被 tsdown 的 vendor/* glob 匹配
+//     并导致 build 报 dsh-root entry 失败）
+const vendorJunk = resolve(dshRoot, 'vendor/deepseek-harness-desktop');
+if (existsSync(vendorJunk)) {
+  rmSync(vendorJunk, { recursive: true, force: true });
+  console.log('[build-dsh] 清理 vendor 残留: vendor/deepseek-harness-desktop');
 }
 
-// 1. apply patch（幂等：--reverse --check 成功即已应用，跳过）
-const applied = runQuiet(`git apply --reverse --check "${patchFile}"`, dshRoot);
-if (applied) {
-  console.log('[build-dsh] patch 已应用，跳过');
-} else {
-  try {
-    run(`git apply "${patchFile}"`, dshRoot);
-  } catch {
-    console.error('[build-dsh] patch 应用失败（可能与 dsh 版本冲突），请手动处理 patches/ 下的补丁');
+// 1. apply patches（幂等：--reverse --check 成功即已应用，跳过）
+for (const patchFile of patchFiles) {
+  if (!existsSync(patchFile)) {
+    console.error(`[build-dsh] patch 未找到: ${patchFile}`);
     process.exit(1);
+  }
+  const applied = runQuiet(`git apply --reverse --check "${patchFile}"`, dshRoot);
+  if (applied) {
+    console.log(`[build-dsh] patch 已应用: ${basename(patchFile)}`);
+  } else {
+    try {
+      run(`git apply "${patchFile}"`, dshRoot);
+    } catch {
+      console.error(`[build-dsh] patch 应用失败（可能与 dsh 版本冲突）: ${basename(patchFile)}`);
+      process.exit(1);
+    }
   }
 }
 
