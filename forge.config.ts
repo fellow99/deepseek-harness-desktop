@@ -1,6 +1,7 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
+import { MakerDMG } from '@electron-forge/maker-dmg';
 import { MakerDeb } from '@electron-forge/maker-deb';
 import { MakerRpm } from '@electron-forge/maker-rpm';
 import { VitePlugin } from '@electron-forge/plugin-vite';
@@ -23,6 +24,8 @@ const config: ForgeConfig = {
     }),
     // 目录包（免安装，本地自用/调试）
     new MakerZIP({}, ['darwin', 'linux', 'win32']),
+    // macOS：DMG（依赖系统 hdiutil，仅 macOS 平台生效；其他平台 make 时自动跳过）
+    new MakerDMG({}),
     // Linux：deb / rpm（maker-rpm 需单独安装，已在 devDependencies 中）
     new MakerRpm({}),
     new MakerDeb({}),
