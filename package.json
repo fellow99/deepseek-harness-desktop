@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "build:dsh": "node scripts/build-dsh.mjs",
     "collect:dsh": "node scripts/collect-dsh.mjs",
-    "prepackage": "node scripts/collect-dsh.mjs"
+    "prepackage": "node scripts/collect-dsh.mjs",
+    "premake": "node scripts/collect-dsh.mjs"
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1"
