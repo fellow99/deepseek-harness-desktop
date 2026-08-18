@@ -2,7 +2,7 @@
   "name": "deepseek-harness-desktop",
   "productName": "DeepSeek Harness Desktop",
   "version": "0.1.0",
-  "description": "基于 Electron 的 deepseek-harness 桌面封装",
+  "description": "An Electron-based desktop wrapper for deepseek-harness.",
   "author": "fellow99",
   "license": "MIT",
   "main": ".vite/build/main.js",
