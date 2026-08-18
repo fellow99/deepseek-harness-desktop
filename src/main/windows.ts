@@ -14,13 +14,6 @@ import path from 'node:path';
 /** 权限白名单：仅安全剪贴板写入 + 通知 */
 const RENDERER_PERMISSIONS = new Set(['clipboard-sanitized-write', 'notifications']);
 
-let quitting = false;
-
-/** 标记「真正退出」：放行窗口 close（区别于「关窗隐藏到托盘」） */
-export function setQuitting(value: boolean): void {
-  quitting = value;
-}
-
 /** 受信导航/权限来源：仅 localhost（dsh webserver）或 vite dev server */
 function isTrustedOrigin(rawUrl: string): boolean {
   try {
@@ -124,13 +117,7 @@ export function createMainWindow(url: string | null): BrowserWindow {
     );
   });
 
-  // 后台驻留：非退出状态下关窗 = 隐藏到托盘（产品概念设计第 13 节）
-  win.on('close', (event) => {
-    if (!quitting) {
-      event.preventDefault();
-      win.hide();
-    }
-  });
+  // 关窗即退出：放行 close，由 window-all-closed 触发 app.quit 优雅关闭（含后端 shutdown）
 
   win.webContents.on('did-fail-load', (_event, code, desc, failedUrl) => {
     console.error(`[dsh-desktop] failed to load ${failedUrl}: ${code} ${desc}`);

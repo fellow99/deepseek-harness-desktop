@@ -7,7 +7,7 @@ import {
   setupSystemCertificates,
 } from './lifecycle';
 import { startHost, type HostHandle } from './host';
-import { createMainWindow, registerWindowIpcHandlers, setQuitting } from './windows';
+import { createMainWindow, registerWindowIpcHandlers } from './windows';
 import { createTray, destroyTray } from './tray';
 import { setupNotifications } from './notifications';
 
@@ -68,17 +68,15 @@ if (!gotLock) {
   });
 
   // ── 4. 生命周期 ───────────────────────────────────────────
-  // 后台驻留：关窗 = 隐藏到托盘（windows.ts 的 close 事件处理），不退出；
-  // 真正退出走托盘菜单「退出」→ app.quit()。
+  // 关窗即退出：所有窗口关闭后退出（触发 before-quit 优雅关闭后端）
   app.on('window-all-closed', () => {
-    // no-op：MVP 后台驻留，不随窗口全关退出
+    app.quit();
   });
 
   app.on('before-quit', (event) => {
     if (isQuitting) return; // 二次 quit 放行（优雅关闭完成后的真正退出）
     event.preventDefault();
     isQuitting = true;
-    setQuitting(true);
     // 优雅关闭：dispose dsh 插件树（ProcessShutdown.shutdown），完成后退出
     void Promise.resolve(host?.shutdown()).finally(() => {
       destroyTray();
