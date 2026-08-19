@@ -11,6 +11,10 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    // Linux 可执行文件名：maker-rpm/deb 的 bin 默认取 package.json 的 name，而非 productName。
+    // productName 带空格时，Electron Packager 会生成 "DeepSeek Harness Desktop" 可执行文件，
+    // 与 maker-rpm/deb 期望的 "deepseek-harness-desktop" 不匹配（Windows/macOS 用 appName 不受影响）。
+    executableName: 'deepseek-harness-desktop',
     // dsh 部署产物（dsh-dist/）打进 out/resources/dsh-dist（asar 外，供 host.ts 的
     // ESM 动态 import；含 dsh lib + node_modules + web dist + desktop profile）。
     // 注：@electron/packager 18.x 的 extraResource 仅支持字符串（复制到 resources/<basename>）。
