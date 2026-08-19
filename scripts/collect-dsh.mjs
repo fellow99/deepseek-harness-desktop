@@ -144,6 +144,41 @@ function collectNonHoistedDeps() {
   }
 }
 
+/** 递归清理原生模块中非目标平台的 prebuilds（如 node-pty 的 linux-arm64/win32-x64 等），
+ *  避免 rpmbuild 的 brp-strip 遇到非目标架构 .node 报错，并减小包体积。 */
+function pruneForeignPrebuilds(dir, depth = 0) {
+  if (depth > 8) return;
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  const target = `${process.platform}-${process.arch}`;
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const fullPath = join(dir, entry.name);
+    if (entry.name === 'prebuilds') {
+      for (const sub of readdirSync(fullPath)) {
+        const subPath = resolve(fullPath, sub);
+        let st;
+        try {
+          st = lstatSync(subPath);
+        } catch {
+          continue;
+        }
+        if (!st.isDirectory()) continue;
+        if (sub !== target) {
+          rmSync(subPath, { recursive: true, force: true });
+          console.log(`[collect-dsh] 清理非目标架构 prebuilds: ${sub}`);
+        }
+      }
+    } else {
+      pruneForeignPrebuilds(fullPath, depth + 1);
+    }
+  }
+}
+
 // 0. 校验
 if (!existsSync(dshRoot)) {
   console.error(`[collect-dsh] dsh 未找到: ${dshRoot}`);
@@ -176,6 +211,10 @@ collectNonHoistedDeps();
 // 6. 删除 .pnpm store（已物化，冗余）
 const pnpmStore = resolve(distDir, 'node_modules/.pnpm');
 if (existsSync(pnpmStore)) rmSync(pnpmStore, { recursive: true, force: true });
+
+// 6b. 清理非目标架构的原生模块 prebuilds（node-pty 等），避免 rpmbuild brp-strip 失败
+console.log('\n[collect-dsh] 清理非目标架构 prebuilds...');
+pruneForeignPrebuilds(join(distDir, 'node_modules'));
 
 // 7. 复制 web dist（pnpm deploy 不物化 build 产物，frontend-static 经
 //    require.resolve('@deepseek-ai/dsh-web-frontend/dist/index.html') 定位）
