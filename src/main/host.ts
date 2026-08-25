@@ -165,6 +165,35 @@ function linkWorkspacePackage(pkgDir: string, dest: string): void {
  *  仅复制 lib/、client/、cordis.patch.yml、package.json（排除 node_modules）——dshmarket 的 @deepseek-ai 依赖
  *  从宿主（dsh 根 node_modules，经 ensureWorkspaceLinks）解析，避免其 devDeps 里的 @deepseek-ai 重复/版本错配。
  *  与 collect-dsh.mjs 的打包物化（dsh-dist/node_modules/dshmarket）对齐。 */
+/** 递归复制 dshmarket 的运行时依赖（其 dependencies 字段 + 传递依赖）到物化目录。
+ *  npm 扁平布局下传递依赖也位于顶层，逐包读 dependencies 遍历。仅复制生产依赖，
+ *  避免 devDeps（react/vitest 等）的体积膨胀与 @deepseek-ai 副本的版本错配。 */
+function copyMarketRuntimeDeps(srcNm: string, destNm: string, marketRoot: string): void {
+  let queue: string[];
+  try {
+    const marketPkg = JSON.parse(readFileSync(join(marketRoot, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> };
+    queue = Object.keys(marketPkg.dependencies ?? {});
+  } catch {
+    return;
+  }
+  const seen = new Set<string>();
+  while (queue.length > 0) {
+    const name = queue.shift()!;
+    if (seen.has(name) || name.startsWith('@deepseek-ai/')) continue;
+    seen.add(name);
+    const srcPkg = join(srcNm, name);
+    const destPkg = join(destNm, name);
+    if (!existsSync(join(srcPkg, 'package.json')) || existsSync(join(destPkg, 'package.json'))) continue;
+    cpSync(srcPkg, destPkg, { recursive: true, dereference: true });
+    try {
+      const deps = (JSON.parse(readFileSync(join(srcPkg, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> }).dependencies ?? {};
+      for (const dep of Object.keys(deps)) queue.push(dep);
+    } catch {
+      // 无法解析依赖清单，跳过其传递依赖
+    }
+  }
+}
+
 function ensureDshMarketMaterialized(): void {
   const src = resolve(__dirname, '../../../dsh-market');
   const dest = join(DSH_ROOT, 'node_modules', 'dshmarket');
@@ -175,9 +204,38 @@ function ensureDshMarketMaterialized(): void {
       const s = join(src, entry);
       if (existsSync(s)) cpSync(s, join(dest, entry), { recursive: true, dereference: true });
     }
+    // 复制 dshmarket 的运行时依赖（undici、js-yaml 等，含传递依赖）；@deepseek-ai scope 从宿主解析。
+    const srcNm = join(src, 'node_modules');
+    if (existsSync(srcNm)) {
+      const destNm = join(dest, 'node_modules');
+      mkdirSync(destNm, { recursive: true });
+      copyMarketRuntimeDeps(srcNm, destNm, src);
+    }
     console.log('[dsh-desktop] 已物化 dshmarket → dsh 根 node_modules');
   } catch {
     // 物化失败降级：市场不可解析时随 Host 启动不加载，不阻塞
+  }
+}
+
+/** 将 dshmarket 链接到 $DSH_HOME/profiles/node_modules，使 dsh-client-modules（baseUrl = profile 目录）
+ *  的 client 扫描能解析 dshmarket 的 dsh.client 声明，从而服务 /plugins/dshmarket/client.js。
+ *  loader 的 bundle 解析走 install anchor（DSH_ROOT/node_modules），而 client 扫描走 profile 目录，
+ *  两条路径不同，故需两处皆可解析。开发/打包均需（打包态 src 为 dsh-dist/node_modules/dshmarket）。 */
+function ensureDshMarketProfileLink(): void {
+  const src = app.isPackaged
+    ? join(process.resourcesPath, 'dsh-dist', 'node_modules', 'dshmarket')
+    : join(DSH_ROOT, 'node_modules', 'dshmarket');
+  if (!existsSync(join(src, 'package.json'))) return;
+  const home = process.env.DSH_HOME;
+  if (!home) return;
+  const dest = join(home, 'profiles', 'node_modules', 'dshmarket');
+  if (existsSync(dest)) return;
+  try {
+    mkdirSync(join(home, 'profiles', 'node_modules'), { recursive: true });
+    symlinkSync(src, dest, 'junction');
+    console.log('[dsh-desktop] 已链接 dshmarket → profiles/node_modules');
+  } catch {
+    // 链接失败降级：client 扫描不到则市场 UI 不注入，不阻塞 Host
   }
 }
 
@@ -202,6 +260,9 @@ export async function startHost(): Promise<HostHandle | null> {
     ensureWorkspaceLinks();
     ensureDshMarketMaterialized();
   }
+  // dshmarket 的 client bundle 由 dsh-client-modules（baseUrl=profile 目录）扫描服务，
+  // 需链接到 $DSH_HOME/profiles/node_modules（开发/打包均需）。
+  ensureDshMarketProfileLink();
   // dsh 的 HMR 依赖 Node 内部 API（--expose-internals / node-addon-require-builtin），
   // Electron 下不可用，禁用之（生产桌面壳无需用户 patch 热重载）。
   process.env.DSH_DISABLE_HMR = '1';

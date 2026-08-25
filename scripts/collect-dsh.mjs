@@ -79,8 +79,35 @@ function copyPackage(pkgDir, destRoot) {
   console.log(`[collect-dsh] 物化 @deepseek-ai/${shortName}`);
 }
 
+/** 递归复制 dshmarket 的运行时依赖（dependencies 字段 + 传递依赖）到物化目录，@deepseek-ai scope 从宿主解析。 */
+function copyMarketRuntimeDeps(srcNm, destNm, marketRoot) {
+  let queue = [];
+  try {
+    queue = Object.keys(JSON.parse(readFileSync(resolve(marketRoot, 'package.json'), 'utf8')).dependencies ?? {});
+  } catch {
+    return;
+  }
+  const seen = new Set();
+  while (queue.length > 0) {
+    const name = queue.shift();
+    if (seen.has(name) || name.startsWith('@deepseek-ai/')) continue;
+    seen.add(name);
+    const srcPkg = resolve(srcNm, name);
+    const destPkg = resolve(destNm, name);
+    if (!existsSync(resolve(srcPkg, 'package.json')) || existsSync(resolve(destPkg, 'package.json'))) continue;
+    cpSync(srcPkg, destPkg, { recursive: true, dereference: true });
+    try {
+      const deps = JSON.parse(readFileSync(resolve(srcPkg, 'package.json'), 'utf8')).dependencies ?? {};
+      for (const dep of Object.keys(deps)) queue.push(dep);
+    } catch {
+      // 跳过无法解析的传递依赖
+    }
+  }
+}
+
 /** 物化 dsh-market（插件市场，非 scoped 包）到 dsh-dist/node_modules/dshmarket。
- *  仅复制运行时必需产物：package.json + cordis.patch.yml + lib/ + client/（排除源码/测试/node_modules）。 */
+ *  复制 package.json + cordis.patch.yml + lib/ + client/ + 运行时依赖（undici/js-yaml 等），
+ *  排除源码/测试/devDeps；@deepseek-ai 依赖从宿主 dsh-dist 解析。 */
 function collectDshMarket() {
   const marketRoot = resolve(desktopRoot, '../dsh-market');
   const dest = resolve(distDir, 'node_modules/dshmarket');
@@ -102,7 +129,12 @@ function collectDshMarket() {
       return top === 'package.json' || top === 'cordis.patch.yml' || top === 'lib' || top === 'client';
     },
   });
-  console.log('[collect-dsh] 物化 dshmarket（lib/client/cordis.patch.yml/package.json）');
+  // 复制运行时依赖（dshmarket 的 dependencies，如 undici/js-yaml）
+  const srcNm = resolve(marketRoot, 'node_modules');
+  if (existsSync(srcNm)) {
+    copyMarketRuntimeDeps(srcNm, resolve(dest, 'node_modules'), marketRoot);
+  }
+  console.log('[collect-dsh] 物化 dshmarket（lib/client/cordis.patch.yml/package.json + 运行时依赖）');
 }
 
 /** 补全所有 @deepseek-ai 包（packages、vendor、apps 下），覆盖 peer 依赖与 link: override。 */
