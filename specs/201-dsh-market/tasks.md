@@ -44,6 +44,7 @@
 - [x] T16 Bug-2 修复：新增 `ensureProfilePluginLinks`，把 profile node_modules 顶层插件 junction 到 dsh 根 node_modules
 - [x] T17 Bug-3 修复：卸载后悬空 junction 的无条件清理 + Windows 安全删除（unlink/rmdir 回退）
 - [x] T18 Bug-4 修复：抽出 `linkFlatNodeModules`，额外链接 `.pnpm/node_modules` 下全部传递依赖，修复聚合型插件 19 个 ERR_MODULE_NOT_FOUND
+- [x] T18b Bug-5 修复：`fetch-runtime.mjs` 增加 darwin 支持（Node `.tar.gz` + `pnpm-macos-{arch}`），修复 macOS make 失败 `unsupported platform: darwin`
 - [x] T19 开发态安装通道：开发态也生成 dsh shim（commit d44ca9c），并递归复制 dshmarket 运行时依赖（commit 77360e5）
 - [x] T20 打包态端到端验证：dsh-composer-expand 与聚合插件 @linxin666/dsh-web-ui-all 安装→重启 live→卸载→重启干净
 

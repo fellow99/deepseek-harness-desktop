@@ -181,11 +181,13 @@
 
 ### 10.2 打包态关键路径（实测）
 
-- 便携 Node：`resources/runtime/node/node.exe`（v24.11.1）。
-- 便携 pnpm：`resources/runtime/pnpm/pnpm.cmd`（9.15.9），PATH 前置后市场 `spawnSync('pnpm')` 命中。
-- dsh shim：运行时写入 `userData/runtime-bin/dsh.cmd`，内容为 `"<便携node>" "<resources>/dsh-dist/lib/bin.js" %*`。
+- 便携 Node：`resources/runtime/node/`（Windows: `node.exe` 在根；Linux/macOS: `bin/node`；v24.11.1）。
+- 便携 pnpm：`resources/runtime/pnpm/` 下的单二进制（Windows: `pnpm.exe`；Linux/macOS: `pnpm`，chmod 755；9.15.9），PATH 前置后市场 `spawnSync('pnpm')` 命中。
+- dsh shim：运行时写入 `userData/runtime-bin/`（Windows: `dsh.cmd`；POSIX: `dsh`），内容为 `"<便携node>" "<resources>/dsh-dist/lib/bin.js" %*`（POSIX 用 `exec ... "$@"`）。
 - dshmarket 物化：`resources/dsh-dist/node_modules/dshmarket/{lib,client,package.json,cordis.patch.yml}` + 其 `node_modules` 运行时依赖。
-- profile 插件链接：`ensureProfilePluginLinks()` 在 `runProfile` 前执行，先清理悬空 junction，再链接 profile 顶层与 `.pnpm/node_modules` 到 `dsh-dist/node_modules`。
+- profile 插件链接：`ensureProfilePluginLinks()` 在 `runProfile` 前执行，先清理悬空 junction/symlink，再链接 profile 顶层与 `.pnpm/node_modules` 到 `dsh-dist/node_modules`。
+
+> 跨平台资产（`scripts/fetch-runtime.mjs`）：Windows 用 Node `.zip` + `pnpm-win-{arch}.exe`；Linux 用 Node `.tar.xz` + `pnpm-linuxstatic-{arch}`；macOS 用 Node `.tar.gz`（官方无 .tar.xz）+ `pnpm-macos-{arch}`。均经 `tar -xf` 解压（自动识别 gzip/xz），`arch` 取 `arm64` 或 `x64`。
 
 ### 10.3 collect-dsh 健壮性调整
 

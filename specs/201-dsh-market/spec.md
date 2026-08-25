@@ -132,7 +132,7 @@ dsh-market 是一个前后端混合的 Cordis 插件（npm 包 `dshmarket`，当
 - **体积**：便携 Node + pnpm 增加安装包体积（约 30–80MB），属可接受代价（本地打包自用）。
 - **可维护性**：dsh-market 作为 sibling 源码引用，随其 tag 迭代；收集逻辑集中在 `collect-dsh.mjs` 一类脚本中。
 - **安全**：市场所有 API 仅接受同源 loopback 请求（沿用 dsh-market 既有约束）；`allowRestart: false` 关闭市场的进程重启能力；不启用 Electron 的 `RunAsNode` fuse（维持现有安全加固）。
-- **可移植性**：便携 Node/pnpm 的 shim 需在 Windows（`.cmd`）与 Linux（shell 脚本）两平台可用。
+- **可移植性**：便携 Node/pnpm 的 shim 需在 Windows（`.cmd`）、Linux 与 macOS（POSIX shell 脚本）三平台可用。
 
 ## 7. 假设与约束
 
@@ -187,6 +187,7 @@ dshmarket 需要在两个不同位置均可被解析，二者缺一不可：
 | Bug-2 | 重启后 Host 启动失败 `ERR_MODULE_NOT_FOUND: <plugin>` | 用户插件落在 `$DSH_HOME/profiles/desktop/node_modules`（pnpm 独立树），loader 裸名 import 沿 dsh-dist 树查找找不到；dsh 自带 `healProfilesModuleFallback` 只链接 install anchor 依赖闭包，不含用户新装包 | 新增 `ensureProfilePluginLinks`：runProfile 前把 profile node_modules 顶层包 junction 到 dsh 根 node_modules（nearest-wins） |
 | Bug-3 | 卸载后 dsh-dist 残留指向已删包的悬空 junction，`rmSync({force})` 在 Windows 悬空 junction 上报 "Path is a directory" | 清理逻辑被 `if (!existsSync(profileNm)) return` 早退挡住；Windows 悬空 junction 需特殊删除 | 清理无条件前置；用 `readlinkSync`+`existsSync` 识别悬空；`unlinkSync` 删除（不跟随），EPERM/EISDIR 回退 `rmdirSync` |
 | Bug-4 | 安装聚合型插件 `@linxin666/dsh-web-ui-all` 后重启，AggregateError 列出 19 个 `ERR_MODULE_NOT_FOUND`（`@linxin666/dsh-client-ui-*`、`dsh-better-sidebar`、`@mlgbnb/dsh-archive-manager` 等） | Bug-2 只链接了 profile node_modules 顶层（直接依赖）；pnpm 把传递依赖放在 `node_modules/.pnpm/node_modules/`（372 个 junction，指向 `.pnpm/<pkg>@ver_hash/node_modules/<pkg>`）。聚合插件的 cordis.patch.yml 把十几个传递依赖声明为 loader entry，loader 裸名 import 全部解析失败 | 抽出 `linkFlatNodeModules(srcNm, destRoot, skipTop?)`，除顶层外额外遍历 `.pnpm/node_modules/` 把全部传递依赖 junction 到 dsh 根 node_modules（nearest-wins，不覆盖 dsh-dist 自带依赖） |
+| Bug-5 | macOS（`macos-latest`）`npm run make` 在 fetch-runtime 阶段失败：`unsupported platform: darwin` | `scripts/fetch-runtime.mjs` 的 `nodeAsset()`/`pnpmAsset()` 只处理 win32 与 linux，没有 darwin 分支；而 CI 矩阵含 macos-latest | 增加 darwin 支持：Node 用 `node-v<ver>-darwin-<arch>.tar.gz`（macOS 官方无 .tar.xz），pnpm 用 `pnpm-macos-<arch>` 单二进制；`tar -xf` 自动识别 gzip/xz，解压逻辑复用 POSIX 分支 |
 
 ### 9.4 市场 API 契约（从 client bundle 反查）
 

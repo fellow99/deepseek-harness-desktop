@@ -4,8 +4,9 @@
  *
  * 用法：npm run fetch:runtime
  * 幂等：runtime/.versions.json 记录已下载版本，匹配则跳过。
+ * 支持平台：win32（x64/arm64）、linux（x64/arm64）、darwin（x64/arm64）。
  * 布局（平台原生）：
- *   runtime/node/     —— Node 发行版（win: node.exe 在根；linux: bin/node）
+ *   runtime/node/     —— Node 发行版（win: node.exe 在根；linux/darwin: bin/node）
  *   runtime/pnpm/     —— standalone pnpm 单二进制（pnpm[.exe]）
  */
 import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
@@ -27,7 +28,11 @@ const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
 
 function nodeAsset() {
   if (platform === 'win32') return { file: `node-v${NODE_VERSION}-win-${arch}.zip`, kind: 'zip' };
-  if (platform === 'linux') return { file: `node-v${NODE_VERSION}-linux-${arch}.tar.xz`, kind: 'tarxz' };
+  if (platform === 'linux') return { file: `node-v${NODE_VERSION}-linux-${arch}.tar.xz`, kind: 'tar' };
+  if (platform === 'darwin') {
+    // macOS 官方仅提供 .tar.gz（无 .tar.xz）；Intel=x64，Apple Silicon=arm64。
+    return { file: `node-v${NODE_VERSION}-darwin-${arch}.tar.gz`, kind: 'tar' };
+  }
   throw new Error(`[fetch-runtime] unsupported platform: ${platform}`);
 }
 
@@ -37,6 +42,9 @@ function pnpmAsset() {
   }
   if (platform === 'linux') {
     return { file: 'pnpm', url: `https://github.com/pnpm/pnpm/releases/download/v${PNPM_VERSION}/pnpm-linuxstatic-${arch}` };
+  }
+  if (platform === 'darwin') {
+    return { file: 'pnpm', url: `https://github.com/pnpm/pnpm/releases/download/v${PNPM_VERSION}/pnpm-macos-${arch}` };
   }
   throw new Error(`[fetch-runtime] unsupported platform: ${platform}`);
 }
