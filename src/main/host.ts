@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { inspect } from 'node:util';
@@ -86,27 +86,67 @@ function findProfileBootEntry(): string | null {
  * desktop 的 profile 声明 `dsh.profile.bundles = [dsh-base, dsh-web-app]`（web 组合，
  * 微调 printUrl），而 dsh 对未知 profile 的默认初始化只有 `dsh-base`（无 web-app），
  * 故必须显式放置 desktop 工程自带的 profile。
+ *
+ * 合并策略（不能整目录覆盖）：用户通过市场安装插件后，dsh 会把插件追加进该 profile 的
+ * package.json（dependencies + bundles）。整目录覆盖会抹掉用户安装的插件。因此：
+ *  - dest 不存在 → 复制种子；
+ *  - dest 已存在 → 仅把缺失的「种子依赖」和「种子 bundle」合并进 dest 的 package.json，
+ *    保留用户追加的插件；种子的其他文件（cordis.patch.yml 等）照常补齐。
  */
 function ensureDesktopProfile(home: string): void {
   const dest = join(home, 'profiles', 'desktop');
   const srcPkg = join(DESKTOP_PROFILE_SRC, 'package.json');
   if (!existsSync(srcPkg)) return;
-  const destPkg = join(dest, 'package.json');
-  if (existsSync(destPkg)) {
-    // 已存在：比较 bundles 是否一致。一致则跳过（幂等）；不一致则重新复制（升级迁移，
-    // 如 0.1.0 → 0.1.1 新增 dshmarket bundle，老用户的旧 profile 副本需更新）。
-    try {
-      const readBundles = (p: string): unknown[] => {
-        const m = JSON.parse(readFileSync(p, 'utf8')) as { dsh?: { profile?: { bundles?: unknown[] } } };
-        return m.dsh?.profile?.bundles ?? [];
-      };
-      if (JSON.stringify(readBundles(srcPkg)) === JSON.stringify(readBundles(destPkg))) return;
-    } catch {
-      return; // 解析失败保持现状，避免破坏用户已修改的 profile
-    }
-  }
   mkdirSync(dest, { recursive: true });
-  cpSync(DESKTOP_PROFILE_SRC, dest, { recursive: true });
+
+  const destPkg = join(dest, 'package.json');
+  if (!existsSync(destPkg)) {
+    cpSync(DESKTOP_PROFILE_SRC, dest, { recursive: true });
+    return;
+  }
+
+  // 合并 package.json：补齐缺失的种子依赖与 bundle，不动用户已追加的内容。
+  try {
+    const seed = JSON.parse(readFileSync(srcPkg, 'utf8')) as {
+      dependencies?: Record<string, string>;
+      dsh?: { profile?: { bundles?: string[] } };
+    };
+    const cur = JSON.parse(readFileSync(destPkg, 'utf8')) as {
+      dependencies?: Record<string, string>;
+      dsh?: { profile?: { bundles?: string[] } };
+    };
+    let changed = false;
+
+    cur.dependencies ??= {};
+    for (const [name, spec] of Object.entries(seed.dependencies ?? {})) {
+      if (!(name in cur.dependencies)) {
+        cur.dependencies[name] = spec;
+        changed = true;
+      }
+    }
+
+    cur.dsh ??= {};
+    cur.dsh.profile ??= {};
+    const curBundles = cur.dsh.profile.bundles ?? [];
+    for (const b of seed.dsh?.profile?.bundles ?? []) {
+      if (!curBundles.includes(b)) {
+        curBundles.push(b);
+        changed = true;
+      }
+    }
+    cur.dsh.profile.bundles = curBundles;
+
+    if (changed) writeFileSync(destPkg, JSON.stringify(cur, null, 2) + '\n');
+  } catch {
+    // 解析失败保持现状，避免破坏用户已修改的 profile
+  }
+
+  // 补齐种子里的其他文件（cordis.patch.yml 等），不删除 dest 已有文件。
+  for (const name of readdirSync(DESKTOP_PROFILE_SRC)) {
+    if (name === 'package.json') continue;
+    const destFile = join(dest, name);
+    if (!existsSync(destFile)) cpSync(join(DESKTOP_PROFILE_SRC, name), destFile, { recursive: true });
+  }
 }
 
 /** dsh runProfile 的最小签名（动态 import 产物无类型，此处收窄以保持类型安全） */
@@ -259,6 +299,91 @@ function ensureDshMarketProfileLink(): void {
 }
 
 /**
+ * 将 desktop profile 中通过市场安装的插件 junction 到 dsh 根 node_modules，使 loader 能裸名解析。
+ *
+ * 背景：用户安装的插件落在 `$DSH_HOME/profiles/desktop/node_modules/<plugin>`（pnpm 独立目录树）。
+ * `cordis-plugin-loader` 位于 `<dsh根>/node_modules/@deepseek-ai/`，用裸 `import('<plugin>')` 加载
+ * bundle 时 Node 沿 dsh 根目录树向上查找 node_modules，到不了独立的 profile 目录树，导致
+ * ERR_MODULE_NOT_FOUND、Host 启动失败。dsh 自带的 healProfilesModuleFallback 仅链接 install
+ * anchor 依赖闭包内的包，不含用户新装的插件，故此处补一环：把 profile node_modules 的顶层包
+ * 链接到 dsh 根 node_modules（nearest-wins：已存在的 dshmarket/@deepseek-ai 等不覆盖）。
+ * 必须在 runProfile 之前执行（healProfilesModuleFallback 之后或之前均可，链接幂等）。
+ */
+function ensureProfilePluginLinks(): void {
+  const home = process.env.DSH_HOME;
+  if (!home) return;
+  const rootNm = join(DSH_ROOT, 'node_modules');
+  mkdirSync(rootNm, { recursive: true });
+  // 清理悬空 junction：插件被市场卸载后 pnpm 可能删除整个 profile node_modules，
+  // 但上一轮启动建到 dsh 根 node_modules 的 junction 残留（指向已不存在的目标）。
+  // 用 readlinkSync 识别链接（不依赖 isSymbolicLink 在 Windows junction 上的跨运行时差异），
+  // 再用 existsSync 跟随判断目标是否存活；pnpm 部署的真实文件/目录 readlinkSync 抛 EINVAL，不会被误删。
+  const isDanglingLink = (p: string): boolean => {
+    try { readlinkSync(p); } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EINVAL') return false; // 非链接（真实文件/目录）
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return true;  // 父路径缺失
+      return false;
+    }
+    return !existsSync(p); // 是链接：目标不存在 => 悬空
+  };
+  const pruneDangling = (dir: string): void => {
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir)) {
+      const p = join(dir, entry);
+      let ls;
+      try { ls = lstatSync(p); } catch { continue; }
+      if (ls.isSymbolicLink() || isDanglingLink(p)) {
+        if (isDanglingLink(p)) {
+          // rmSync({force}) 在 Windows 悬空 junction 上会跟随链接、报 "Path is a directory"；
+          // unlinkSync 删除链接本身（不跟随目标）。Windows 目录 junction 在部分 Node 版本上
+          // unlink 返回 EPERM/EISDIR，此时 rmdirSync 移除 reparse point 而不递归。
+          try { unlinkSync(p); } catch (err) {
+            const code = (err as NodeJS.ErrnoException).code;
+            if (code === 'EPERM' || code === 'EISDIR') {
+              try { rmdirSync(p); } catch { /* ignore */ }
+            }
+          }
+        }
+      }
+    }
+  };
+  // 清理必须无条件执行（即使 profile node_modules 已被 pnpm 删除），否则卸载后的悬空
+  // junction 永不清理。顶层 + 各 @scope 子目录（社区插件可能是 @scope/name）。
+  pruneDangling(rootNm);
+  for (const entry of readdirSync(rootNm)) {
+    if (entry.startsWith('@')) {
+      try { if (lstatSync(join(rootNm, entry)).isDirectory()) pruneDangling(join(rootNm, entry)); } catch { /* ignore */ }
+    }
+  }
+
+  // 以下为"把 profile 已装插件链接到 dsh 根"逻辑，需要 profile node_modules 存在。
+  const profileNm = join(home, 'profiles', 'desktop', 'node_modules');
+  if (!existsSync(profileNm)) return;
+  for (const entry of readdirSync(profileNm)) {
+    if (entry === '.pnpm' || entry === '.bin' || entry.startsWith('.')) continue;
+    const src = join(profileNm, entry);
+    let stat;
+    try { stat = statSync(src); } catch { continue; }
+    if (!stat.isDirectory() && !stat.isSymbolicLink()) continue;
+    if (entry.startsWith('@')) {
+      // scoped 包：链接其下每个包
+      const scopeDest = join(rootNm, entry);
+      mkdirSync(scopeDest, { recursive: true });
+      for (const pkg of readdirSync(src)) {
+        const s = join(src, pkg);
+        const d = join(scopeDest, pkg);
+        if (existsSync(d)) continue;
+        try { symlinkSync(s, d, 'junction'); } catch { /* 忽略竞争/权限 */ }
+      }
+    } else {
+      const d = join(rootNm, entry);
+      if (existsSync(d)) continue;
+      try { symlinkSync(src, d, 'junction'); } catch { /* 忽略竞争/权限 */ }
+    }
+  }
+}
+
+/**
  * 启动 dsh Host（desktop profile，进程内，MVP）。
  * 返回 HostHandle；dsh 未构建 / 启动失败时返回 null（主进程据此显示兜底页）。
  */
@@ -282,6 +407,9 @@ export async function startHost(): Promise<HostHandle | null> {
   // dshmarket 的 client bundle 由 dsh-client-modules（baseUrl=profile 目录）扫描服务，
   // 需链接到 $DSH_HOME/profiles/node_modules（开发/打包均需）。
   ensureDshMarketProfileLink();
+  // 用户通过市场安装的插件位于 profile 的 node_modules，需 junction 到 dsh 根 node_modules，
+  // 否则打包态（pnpm 独立目录树）loader 裸名 import 无法解析、Host 启动失败。
+  ensureProfilePluginLinks();
   // dsh 的 HMR 依赖 Node 内部 API（--expose-internals / node-addon-require-builtin），
   // Electron 下不可用，禁用之（生产桌面壳无需用户 patch 热重载）。
   process.env.DSH_DISABLE_HMR = '1';
