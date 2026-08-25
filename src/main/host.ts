@@ -161,6 +161,26 @@ function linkWorkspacePackage(pkgDir: string, dest: string): void {
   }
 }
 
+/** 将 dsh-market（插件市场，非 scoped 包）构建产物物化到 dsh 根 node_modules，使 loader 默认 ESM import 可解析。
+ *  仅复制 lib/、client/、cordis.patch.yml、package.json（排除 node_modules）——dshmarket 的 @deepseek-ai 依赖
+ *  从宿主（dsh 根 node_modules，经 ensureWorkspaceLinks）解析，避免其 devDeps 里的 @deepseek-ai 重复/版本错配。
+ *  与 collect-dsh.mjs 的打包物化（dsh-dist/node_modules/dshmarket）对齐。 */
+function ensureDshMarketMaterialized(): void {
+  const src = resolve(__dirname, '../../../dsh-market');
+  const dest = join(DSH_ROOT, 'node_modules', 'dshmarket');
+  if (!existsSync(join(src, 'package.json')) || existsSync(join(dest, 'package.json'))) return;
+  try {
+    mkdirSync(dest, { recursive: true });
+    for (const entry of ['package.json', 'cordis.patch.yml', 'lib', 'client']) {
+      const s = join(src, entry);
+      if (existsSync(s)) cpSync(s, join(dest, entry), { recursive: true, dereference: true });
+    }
+    console.log('[dsh-desktop] 已物化 dshmarket → dsh 根 node_modules');
+  } catch {
+    // 物化失败降级：市场不可解析时随 Host 启动不加载，不阻塞
+  }
+}
+
 /**
  * 启动 dsh Host（desktop profile，进程内，MVP）。
  * 返回 HostHandle；dsh 未构建 / 启动失败时返回 null（主进程据此显示兜底页）。
@@ -180,6 +200,7 @@ export async function startHost(): Promise<HostHandle | null> {
   // 打包后 dsh-dist 的 node_modules 已由 pnpm deploy 物化为扁平真实文件，无需链接。
   if (!app.isPackaged) {
     ensureWorkspaceLinks();
+    ensureDshMarketMaterialized();
   }
   // dsh 的 HMR 依赖 Node 内部 API（--expose-internals / node-addon-require-builtin），
   // Electron 下不可用，禁用之（生产桌面壳无需用户 patch 热重载）。

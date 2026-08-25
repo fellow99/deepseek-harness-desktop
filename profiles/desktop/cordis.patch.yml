@@ -17,3 +17,16 @@
     printUrl: false
     surfaceContext: true
     trustedHosts: !!js ctx.webStartup.trustedHosts
+
+# dsh-market（插件市场）运行配置覆盖（需求 001-dsh-market）
+#
+# dshmarket 经 dsh.profile.bundles 声明为 bundle，其自身 cordis.patch.yml 会
+# insert 行 `{id: dsh-market, name: dshmarket}`（无 config）。此处覆盖该行注入配置：
+#   - profile: desktop —— 市场默认 profile 为 'web'（config?.profile ?? argvProfile() ?? 'web'），
+#     桌面用 'desktop'，必须显式指定，否则安装/删除会写错目录。
+#   - allowRestart: false —— 桌面壳拥有进程生命周期，市场不得 spawn 独立 dsh 进程重启。
+- id: dsh-market
+  name: dshmarket
+  config:
+    profile: desktop
+    allowRestart: false

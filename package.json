@@ -1,7 +1,7 @@
 {
   "name": "deepseek-harness-desktop",
   "productName": "DeepSeek Harness Desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An Electron-based desktop wrapper for deepseek-harness.",
   "author": "fellow99",
   "license": "MIT",
@@ -14,8 +14,9 @@
     "typecheck": "tsc --noEmit",
     "build:dsh": "node scripts/build-dsh.mjs",
     "collect:dsh": "node scripts/collect-dsh.mjs",
-    "prepackage": "node scripts/collect-dsh.mjs",
-    "premake": "node scripts/collect-dsh.mjs"
+    "fetch:runtime": "node scripts/fetch-runtime.mjs",
+    "prepackage": "node scripts/collect-dsh.mjs && node scripts/fetch-runtime.mjs",
+    "premake": "node scripts/collect-dsh.mjs && node scripts/fetch-runtime.mjs"
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1"

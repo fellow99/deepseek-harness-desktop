@@ -80,4 +80,16 @@ run('corepack pnpm run build:lib:host', dshRoot);
 run('corepack pnpm run build:lib:client', dshRoot);
 run('corepack pnpm run build:web', dshRoot);
 
-console.log('\n[build-dsh] 完成：dsh lib host/client + web dist 已就绪');
+// 4. 构建 dsh-market（插件市场，同级 ../dsh-market 源码引用）
+const marketRoot = resolve(desktopRoot, '../dsh-market');
+if (existsSync(marketRoot)) {
+  if (!existsSync(resolve(marketRoot, 'node_modules'))) {
+    run('npm install', marketRoot);
+  }
+  run('npm run build', marketRoot);
+  console.log('\n[build-dsh] dsh-market 构建完成（lib + client）');
+} else {
+  console.warn(`\n[build-dsh] dsh-market 未找到，跳过: ${marketRoot}`);
+}
+
+console.log('\n[build-dsh] 完成：dsh lib host/client + web dist + dsh-market 已就绪');

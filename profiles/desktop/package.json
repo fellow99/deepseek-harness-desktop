@@ -1,9 +1,12 @@
 {
   "name": "dsh-desktop-profile",
   "private": true,
+  "dependencies": {
+    "dshmarket": "1.26.0"
+  },
   "dsh": {
     "profile": {
-      "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"]
+      "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dshmarket"]
     }
   }
 }

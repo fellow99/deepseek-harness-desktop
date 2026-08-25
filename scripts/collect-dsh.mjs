@@ -79,6 +79,32 @@ function copyPackage(pkgDir, destRoot) {
   console.log(`[collect-dsh] 物化 @deepseek-ai/${shortName}`);
 }
 
+/** 物化 dsh-market（插件市场，非 scoped 包）到 dsh-dist/node_modules/dshmarket。
+ *  仅复制运行时必需产物：package.json + cordis.patch.yml + lib/ + client/（排除源码/测试/node_modules）。 */
+function collectDshMarket() {
+  const marketRoot = resolve(desktopRoot, '../dsh-market');
+  const dest = resolve(distDir, 'node_modules/dshmarket');
+  if (!existsSync(resolve(marketRoot, 'package.json'))) {
+    console.warn(`[collect-dsh] dsh-market 未找到，跳过: ${marketRoot}`);
+    return;
+  }
+  if (existsSync(resolve(dest, 'package.json'))) {
+    console.log('[collect-dsh] dshmarket 已物化');
+    return;
+  }
+  cpSync(marketRoot, dest, {
+    recursive: true,
+    dereference: true,
+    filter: (src) => {
+      const rel = src.slice(marketRoot.length + 1);
+      if (rel === '') return true;
+      const top = rel.split(/[\\/]/)[0];
+      return top === 'package.json' || top === 'cordis.patch.yml' || top === 'lib' || top === 'client';
+    },
+  });
+  console.log('[collect-dsh] 物化 dshmarket（lib/client/cordis.patch.yml/package.json）');
+}
+
 /** 补全所有 @deepseek-ai 包（packages、vendor、apps 下），覆盖 peer 依赖与 link: override。 */
 function collectWorkspacePackages() {
   const destRoot = resolve(distDir, 'node_modules/@deepseek-ai');
@@ -235,5 +261,8 @@ if (existsSync(profileSrc)) {
   cpSync(profileSrc, profileDest, { recursive: true });
   console.log('[collect-dsh] desktop profile 已复制到 dsh-dist/profiles/desktop');
 }
+
+// 9. 物化 dsh-market（插件市场）到 dsh-dist/node_modules/dshmarket
+collectDshMarket();
 
 console.log(`\n[collect-dsh] 完成: ${distDir}`);
