@@ -7,7 +7,7 @@
 ## 阶段一：版本与产物准备
 
 - [x] T1 版本更新：`package.json` version `0.1.0` → `0.1.1`
-- [x] T2 dsh-market 构建：在 `../dsh-market` 执行 `npm install`（node_modules 缺失时）+ `npm run build`，产出 `lib/` 与 `client/client.js`
+- [x] T2 dsh-market 构建：在 `../dsh-market` 执行 `npm install`（node_modules 缺失时）+ `npm run build`，产出 `lib/` 与 `client/client.js`（前置：`git clone --branch v1.26.0 https://github.com/dsh-market/dsh-market.git ../dsh-market`；CI 由 `Checkout dsh-market (sibling)` 步骤完成）
 - [x] T3 物化 dsh-market（打包态）：扩展 `scripts/collect-dsh.mjs`，将 dsh-market 的 `lib/`、`client/`、`cordis.patch.yml`、`package.json`（排除 node_modules）复制到 `dsh-dist/node_modules/dshmarket`
 - [x] T4 dsh-market 可解析（开发态）：扩展 `src/main/host.ts`（或等价步骤），使开发态 `dshmarket` 可被 loader 从 profile 目录解析（symlink `../dsh-market` 到 dsh 根 node_modules 或 `$DSH_HOME/profiles/node_modules`）
 

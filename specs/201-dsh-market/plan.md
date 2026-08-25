@@ -20,10 +20,12 @@
 
 | 依赖 | 版本/来源 | 用途 |
 |------|-----------|------|
-| dsh-market | 源码引用（同级 `../dsh-market`，tag v1.26.0） | 内置插件市场（构建 `lib/` + `client/`） |
-| deepseek-harness（dsh） | 源码引用（`../deepseek-harness`，tag dsh-v0.1.1-rc.2） | `dsh plugin`（`apps/cli/src/plugin.ts`）、`dsh.client` 机制、`cordis.patch.yml` 补丁层、`dsh-dist/lib/bin.js` |
+| dsh-market | 同级源码引用（`../dsh-market`，非 submodule；仓库 dsh-market/dsh-market，tag v1.26.0） | 内置插件市场（构建 `lib/` + `client/`） |
+| deepseek-harness（dsh） | 同级源码引用（`../deepseek-harness`，tag dsh-v0.1.1-rc.2） | `dsh plugin`（`apps/cli/src/plugin.ts`）、`dsh.client` 机制、`cordis.patch.yml` 补丁层、`dsh-dist/lib/bin.js` |
 | 便携 Node.js | 官方发行版 Node 24 LTS（构建期下载） | 运行 `dsh-dist/lib/bin.js`（`dsh plugin`） |
 | pnpm（standalone） | `@pnpm/exe` / 官方 release 单二进制，pnpm 9.x | 实际装包引擎 |
+
+> **构建前置**：`../dsh-market` 与 `../deepseek-harness` 必须在编译前存在于本工程同级目录。`scripts/build-dsh.mjs` 构建 dsh 后会构建 dsh-market（缺 node_modules 时 `npm install` + `npm run build`，缺失目录仅告警跳过）；`scripts/collect-dsh.mjs` 物化 dsh-market 时若目录缺失则**硬失败**（打包必需）。CI 在 `.github/workflows/ci.yml`、`release.yml` 中通过 `Checkout dsh-market (sibling)` 步骤 `git clone --depth 1 --branch v1.26.0 https://github.com/dsh-market/dsh-market.git ../dsh-market`（与 `Checkout dsh (sibling)` 并列）。
 
 ## 2. 宪法合规检查
 

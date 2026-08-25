@@ -9,6 +9,10 @@ on:
         description: 'dsh checkout ref（tag / branch / commit）'
         required: false
         default: 'dsh-v0.1.0-rc.7'
+      dsh_market_ref:
+        description: 'dsh-market checkout ref（tag / branch / commit）'
+        required: false
+        default: 'v1.26.0'
       version:
         description: 'Release tag（例如 v0.1.0，仅手动触发时需填写）'
         required: true
@@ -34,6 +38,16 @@ jobs:
         run: |
           git clone --depth 1 --branch "${DSH_REF}" \
             https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
+
+      # dsh-market（插件市场）同样以 ../dsh-market 同级源码引用：collect-dsh.mjs 物化其
+      # 构建产物为 dsh-dist/node_modules/dshmarket，缺失则打包硬失败。默认 tag v1.26.0。
+      - name: Checkout dsh-market (sibling)
+        shell: bash
+        env:
+          DSH_MARKET_REF: ${{ github.event.inputs.dsh_market_ref || 'v1.26.0' }}
+        run: |
+          git clone --depth 1 --branch "${DSH_MARKET_REF}" \
+            https://github.com/dsh-market/dsh-market.git ../dsh-market
 
       - uses: actions/setup-node@v7
         with:

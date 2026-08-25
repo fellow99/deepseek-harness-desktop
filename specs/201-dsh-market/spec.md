@@ -147,9 +147,11 @@ dsh-market 是一个前后端混合的 Cordis 插件（npm 包 `dshmarket`，当
 
 **上游（被本模块消费）**：
 
-- dsh-market（`../dsh-market`，tag v1.26.0）——内置对象。
+- dsh-market（sibling 源码引用 `../dsh-market`，非 submodule；仓库 https://github.com/dsh-market/dsh-market，tag v1.26.0）——内置对象。构建前必须与本工程同级 checkout；`build:dsh` 会在缺失 node_modules 时 `npm install` 并 `npm run build`，`collect-dsh` 物化其 `lib/`+`client/`+`cordis.patch.yml`+`package.json` 为 `dsh-dist/node_modules/dshmarket`，缺失则打包硬失败。
 - deepseek-harness（`../deepseek-harness`，tag dsh-v0.1.1-rc.2）——`dsh plugin` 命令、`dsh.client` 机制、`cordis.patch.yml` 补丁层、`dsh-dist/lib/bin.js`。
 - 便携 Node.js + pnpm——打包内置运行时。
+
+**构建/CI 前置**：两个 sibling 仓库都需在编译机上与本工程同级存在。GitHub Actions（`.github/workflows/ci.yml`、`release.yml`）在 checkout 本工程后，分别以 `Checkout dsh (sibling)`、`Checkout dsh-market (sibling)` 步骤 `git clone --depth 1 --branch <tag>` 到 `../deepseek-harness`、`../dsh-market`（`actions/checkout` 的 path 不能越出 `$GITHUB_WORKSPACE`，故用 clone）。
 
 **下游（消费本模块）**：
 

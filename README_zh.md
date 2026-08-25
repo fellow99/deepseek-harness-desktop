@@ -57,13 +57,14 @@ DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体�
 
 - **Electron** + **Electron Forge**（脚手架与打包）
 - **deepseek-harness**（与本工程**同级目录**，非 submodule，引用路径 `../deepseek-harness`；消费方式为本地源码引用）
+- **dsh-market**（与本工程**同级目录**，引用路径 `../dsh-market`；内置的可视化插件市场，npm 包名 `dshmarket`）
 - **TypeScript**
 
 ## 开发
 
 ### 集成方式
 
-- **源码引用**：dsh 与本工程同级目录（`../deepseek-harness`，非 submodule），消费其编译产物。
+- **源码引用**：dsh 与本工程同级目录（`../deepseek-harness`，非 submodule），消费其编译产物。插件市场 dsh-market 同样位于同级目录（`../dsh-market`，npm 包名 `dshmarket`），其编译产物被物化为 dsh 的 `node_modules/dshmarket` 并作为内置插件打包；两者都是编译必需的同级依赖。
 - **Host 集成**：`src/main/host.ts` 动态 import dsh 的 `runProfile`（apps/cli 编译产物），
   主进程内挂起 dsh Host（webserver 绑定 `127.0.0.1:<空闲端口>`），返回
   `{ ctx, shutdown, port, url }` 句柄。
@@ -76,11 +77,20 @@ DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体�
 ### 编译过程（含 patches）
 
 dsh 依赖 Node 内部 API（HMR、原生目录对话框），Electron 下不可用，需打两个补丁后构建。
-一条命令完成（幂等，`--reverse --check` 检测已应用则跳过）：
+一条命令完成（幂等，`--reverse --check` 检测已应用则跳过）。它同时会构建同级的 `../dsh-market` 插件市场：
 
 ```bash
-npm run build:dsh   # ① git apply patches/ 两个补丁 → ② pnpm install（node_modules 缺失时）→ ③ build:lib:host + build:lib:client + build:web
+npm run build:dsh   # ① git apply patches/ 两个补丁 → ② pnpm install（node_modules 缺失时）→ ③ build:lib:host + build:lib:client + build:web → ④ 构建 ../dsh-market（缺 node_modules 时 npm install + npm run build）
 ```
+
+**前置条件——同级源码 checkout。** 本工程以同级目录（非 submodule）方式消费 `deepseek-harness` 与 `dsh-market`，构建前需把二者 clone 到本工程的同级目录：
+
+```bash
+git clone --branch dsh-v0.1.0-rc.7 https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
+git clone --branch v1.26.0           https://github.com/dsh-market/dsh-market.git       ../dsh-market
+```
+
+若缺少 `../dsh-market`，`collect-dsh.mjs` 会硬失败（打包产物需要把它物化为 `dsh-dist/node_modules/dshmarket`）；`build:dsh` 在缺少时仅告警并跳过市场构建。
 
 | 补丁 | 作用 |
 |---|---|
@@ -104,7 +114,7 @@ npm run package    # 打包：prepackage 自动 collect（pnpm deploy 物化 dsh
 
 ## 目录结构
 
-本工程与 deepseek-harness（dsh）**同级目录**（非 submodule），经源码引用集成：
+本工程与 deepseek-harness（dsh）、dsh-market **同级目录**（非 submodule），经源码引用集成：
 
 ```
 （同级目录）
@@ -115,30 +125,43 @@ npm run package    # 打包：prepackage 自动 collect（pnpm deploy 物化 dsh
 │   │   ├── dsh-disable-hmr.patch
 │   │   └── dsh-disable-native-picker.patch
 │   ├── scripts/                   # 构建脚本
-│   │   ├── build-dsh.mjs          # apply patches + 安装依赖 + 构建 dsh 产物
-│   │   └── collect-dsh.mjs        # 收集 dsh 产物到 dsh-dist/（pnpm deploy + 物化）
+│   │   ├── build-dsh.mjs          # apply patches + 安装依赖 + 构建 dsh + dsh-market 产物
+│   │   ├── collect-dsh.mjs        # 收集 dsh 产物到 dsh-dist/（pnpm deploy + 物化 dshmarket）
+│   │   └── fetch-runtime.mjs      # 拉取便携 Node + pnpm 到 runtime/（打包态安装通道）
 │   ├── profiles/desktop/          # 自定义 desktop profile（dsh.profile.bundles + cordis.patch.yml）
 │   ├── src/
 │   │   ├── main/                  # Electron 主进程（= dsh Host 宿主）
 │   │   │   ├── index.ts           # 单实例锁 → 启动 host → 建窗 → 托盘/通知/生命周期
-│   │   │   ├── host.ts            # runProfile('desktop') → { ctx, shutdown }；就绪判定
+│   │   │   ├── host.ts            # runProfile('desktop') → { ctx, shutdown }；插件链接/解析
+│   │   │   ├── runtime.ts         # 便携 Node/pnpm/dsh shim + PATH 注入（市场安装通道）
 │   │   │   ├── windows.ts         # BrowserWindow、loadURL(localhost)、无边框/安全
 │   │   │   ├── tray.ts            # 系统托盘（退出/唤回）
 │   │   │   ├── notifications.ts   # 订阅 ctx session/event → 原生通知
 │   │   │   └── lifecycle.ts       # NO_PROXY/CA、崩溃兜底
 │   │   ├── preload/index.ts       # contextBridge：window.dsh（薄 IPC）
 │   │   └── renderer/renderer.ts   # 极薄渲染入口（兜底加载页）
-│   ├── forge.config.ts            # Electron Forge 配置（extraResource 打进 resources/dsh-dist）
+│   ├── forge.config.ts            # Electron Forge 配置（extraResource 打进 dsh-dist + runtime）
 │   ├── vite.*.config.ts           # Vite 配置（main/preload/renderer）
 │   ├── index.html                 # 渲染入口（Forge Vite 约定在项目根）
 │   └── resources/                 # 应用图标、托盘图标
 │
-└── deepseek-harness/              # 被封装宿主（dsh，源码引用，非 submodule）
-    ├── apps/                      # cli（dsh bin，profile-boot）、web（Web 前端，build:web 产出 dist）
-    ├── packages/                  # host / client / core / session 等 workspace 包
-    ├── vendor/                    # vendored cordis 框架包（cordis / loader / hmr 等）
-    └── native/                    # landlock-run 原生模块（Linux 沙箱，MVP 已裁掉）
+├── deepseek-harness/              # 被封装宿主（dsh，源码引用，非 submodule）
+│   ├── apps/                      # cli（dsh bin，profile-boot）、web（Web 前端，build:web 产出 dist）
+│   ├── packages/                  # host / client / core / session 等 workspace 包
+│   ├── vendor/                    # vendored cordis 框架包（cordis / loader / hmr 等）
+│   └── native/                    # landlock-run 原生模块（Linux 沙箱，MVP 已裁掉）
+│
+└── dsh-market/                    # 插件市场（源码引用，非 submodule；npm 包名 "dshmarket"）
+    ├── src/                       # host 端（挂载 /dsh-market/* 路由，spawn `dsh plugin`）
+    ├── client/                    # 浏览器端（设置页 UI；构建到 client/client.js）
+    ├── lib/                       # host 端编译产物（物化为 dsh-dist/node_modules/dshmarket）
+    └── cordis.patch.yml           # loader insert 声明（{ id: dsh-market, name: dshmarket }）
 ```
+
+> **CI 说明**：GitHub Actions 在工作流中 clone 两个同级仓库（见
+> `.github/workflows/ci.yml` 与 `release.yml` 的 `Checkout dsh (sibling)`、
+> `Checkout dsh-market (sibling)` 步骤），因为 `actions/checkout` 无法把第二个仓库放进
+> `$GITHUB_WORKSPACE` 内。
 
 ## 相关文档
 
@@ -149,6 +172,7 @@ npm run package    # 打包：prepackage 自动 collect（pnpm deploy 物化 dsh
 ## 参考
 
 - [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（同级目录 `../deepseek-harness`）—— 被封装的宿主，其 `docs/` 目录含完整架构文档
+- [dsh-market](https://github.com/dsh-market/dsh-market)（同级目录 `../dsh-market`）—— 内置的可视化插件市场（npm 包 `dshmarket`），经 `collect-dsh.mjs` 打包
 - [opencode](https://github.com/sst/opencode)（桌面壳参考：`packages/desktop/`）—— 类似的「用 Electron 包装 agent harness」需求
 
 ## 许可证
