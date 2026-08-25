@@ -1,6 +1,6 @@
 # dsh-market 集成 测试用例
 
-> Module: 001-dsh-market
+> Module: 201-dsh-market
 > 对应规格: [spec.md](./spec.md)
 > 对应方案: [plan.md](./plan.md)
 > Last Updated: 2026-08-25
@@ -125,3 +125,27 @@
 - 开发态 TC-001~TC-010 全部通过。
 - 打包态 TC-101~TC-104 全部通过（至少 Windows；Linux 在 CI 可跑则补）。
 - 负向用例 TC-201~TC-203 按预期降级、无崩溃。
+
+## 6. 实测结果（2026-08-25，打包态）
+
+> 详细报告见 `logs/20260825-1/TEST_REPORT.md`（含四个 Bug 的现象/根因/修复）。
+
+| 用例 | 结果 | 备注 |
+|------|------|------|
+| TC-001 版本号 | ✅ | 0.1.1 |
+| TC-002 产物收集 | ✅ | dsh-dist 内 dshmarket 物化完整（实际版本 1.29.2） |
+| TC-003 自动加载 | ✅ | host 就绪，市场入口出现 |
+| TC-004 浏览目录 | ✅ | registry 200（1.44MB，count=2135） |
+| TC-005 安装插件 | ✅ | dsh-composer-expand@0.1.2 + 聚合插件 @linxin666/dsh-web-ui-all@0.3.3 |
+| TC-006 卸载插件 | ✅ | 重启后干净，悬空 junction 自动清理 |
+| TC-007 开关持久化 | ⏸ 未单独走查 | |
+| TC-008 主题持久化 | ⏸ 未单独走查 | |
+| TC-009 不擅自重启 | ✅ | 注入 `allowRestart:false`，status `restart=false` |
+| TC-010 profile 正确 | ✅ | `profile=desktop` |
+| TC-101 便携运行时 | ✅ | node v24.11.1 + pnpm 9.15.9 |
+| TC-102 打包安装 | ✅ | 便携 Node+pnpm 通道完整跑通 |
+| TC-103 打包卸载/开关 | ✅ 卸载 | 开关未单独走查 |
+| TC-104 打包市场加载 | ✅ | `/`、`/plugins/dshmarket/client.js`（约 442KB）均 200 |
+| TC-201~203 负向 | ⏸ 未测 | |
+
+**回归重点（聚合插件）**：安装 `@linxin666/dsh-web-ui-all`（pnpm 装入 372 个包、cordis.patch.yml 声明 19 个传递依赖为 loader entry）后，重启 Host 正常启动，`/dsh-market/installed` 显示该插件与 dshmarket 均 `state=live, hot=true`，无 `ERR_MODULE_NOT_FOUND`。此用例覆盖了 Bug-4 的传递依赖链接修复。

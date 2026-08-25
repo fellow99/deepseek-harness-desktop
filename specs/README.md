@@ -4,7 +4,7 @@
 **版本：** 脚手架阶段（N/A）
 **技术栈：** Electron + Electron Forge + Vite + TypeScript（封装 deepseek-harness）
 **文档生成时间：** 2026-08-14
-**最后更新：** 2026-08-14
+**最后更新：** 2026-08-25
 
 ---
 
@@ -14,7 +14,8 @@
 |------|------|---------|------|
 | 整体 | 项目级顶层文档 | 8 | 架构、技术、宪法、结构、数据模型等全局文档 + 检查清单 |
 | 模块 | 桌面壳模块 | 16 | 001-008 共 8 个模块，各含 spec.md + plan.md |
-| **合计** | **8 模块目录 / 25 文件**（含 README 索引） | | |
+| 模块 | 扩展模块 | 4 | 201-dsh-market（spec + plan + tasks + test-cases） |
+| **合计** | **9 模块目录 / 29 文件**（含 README 索引） | | |
 
 > 注：本项目级规格文档集不含 `API.md`、`overall-api.md`、`overall-test-cases.md`——数据面在 dsh 侧，桌面壳无自有 API 清单，这些文档尚未生成。
 
@@ -113,6 +114,23 @@
 
 ---
 
+## 四、扩展模块（201+）
+
+扩展模块编号从 201 起，区别于 001-008 的桌面壳基础模块，用于在桌面壳之上集成外部能力。
+
+### 201 — dsh-market 插件市场（dsh-market）
+
+> 把 dsh-market（可视化插件市场）内置到桌面封装的 dsh 环境，随 Host 自动加载，并在开发态/打包态打通安装、删除、配置插件通道（便携 Node + pnpm + dsh CLI）。
+
+| 文档 | 链接 | 说明 |
+|------|------|------|
+| 功能规格 | [201-dsh-market/spec.md](./201-dsh-market/spec.md) | dsh-market 集成功能规格（含实现与调试记录） |
+| 技术方案 | [201-dsh-market/plan.md](./201-dsh-market/plan.md) | dsh-market 集成技术实现方案（含实现偏差记录） |
+| 任务拆解 | [201-dsh-market/tasks.md](./201-dsh-market/tasks.md) | 开发任务与打包态调试修复任务（全部完成） |
+| 测试用例 | [201-dsh-market/test-cases.md](./201-dsh-market/test-cases.md) | 功能/打包态/负向用例与实测结果 |
+
+---
+
 ## 六、模块编号一览
 
 | 编号 | 模块名 | 英文名 | 分类 |
@@ -125,6 +143,7 @@
 | 006 | 薄 IPC 桥 | preload | 桌面壳 |
 | 007 | 应用入口编排 | app-entry | 桌面壳 |
 | 008 | desktop profile | desktop-profile | 桌面壳 |
+| 201 | dsh-market 插件市场 | dsh-market | 扩展模块 |
 
 ---
 

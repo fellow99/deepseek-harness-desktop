@@ -1,9 +1,9 @@
 # dsh-market 集成 功能规格
 
-> Module: 001-dsh-market
-> 需求编号: 001-dsh-market
-> Status: Design（待审批 → 待实现）
-> Git 分支: spec/001-dsh-market
+> Module: 201-dsh-market
+> 需求编号: 201-dsh-market
+> Status: Implemented（已实现并打包验证通过，2026-08-25）
+> Git 分支: spec/201-dsh-market
 > Last Updated: 2026-08-25
 
 ## 1. 模块概述
@@ -156,3 +156,51 @@ dsh-market 是一个前后端混合的 Cordis 插件（npm 包 `dshmarket`，当
 - `008-desktop-profile`：本模块扩展其 `dsh.profile.bundles` 与 `cordis.patch.yml`。
 - `001-host`（`startHost`）：本模块在宿主启动前注入 PATH 并暴露 dsh CLI/pnpm。
 - 构建脚本（`build-dsh.mjs` / `collect-dsh.mjs`）：本模块扩展其收集 dsh-market 产物与便携运行时。
+
+## 9. 实现与调试记录（As-built）
+
+> 本节记录开发调试中实际遇到并解决的问题，作为后续维护的基线事实。源码即真理；与上文设计描述冲突处以本节与源码为准。
+
+### 9.1 版本与产物（实测）
+
+- 工程版本 `0.1.0 → 0.1.1`；内置 dsh-market 打包态实际版本为 `dshmarket@1.29.2`（collect 时从 sibling `dsh-market` 物化，高于设计时的 v1.26.0 tag）。
+- 便携运行时：Node `24.11.1` + pnpm `9.15.9`，置于 `resources/runtime/`；因国内直连 nodejs.org/GitHub releases 挂死/重置，临时经 npmmirror 镜像下载并写入 `.versions.json` 使 `fetch-runtime` 幂等跳过。
+
+### 9.2 两条解析锚点（关键架构事实）
+
+dshmarket 需要在两个不同位置均可被解析，二者缺一不可：
+
+1. **loader/bundle 解析锚点 = `DSH_ROOT/node_modules`**：`cordis-plugin-loader` 位于 `<dsh根>/node_modules/@deepseek-ai/`，用裸 `import('<plugin>')` 加载 bundle，Node 沿 dsh 根目录树向上查找 node_modules。
+2. **client 扫描锚点 = profile 目录**：`dsh-client-modules` 以 `baseUrl = profile 目录` 扫描 `dsh.client` 声明来服务 `/plugins/<pkg>/client.js`。
+
+因此 dshmarket 既要出现在 dsh 根 node_modules（开发态 `ensureDshMarketMaterialized`、打包态 collect 物化），也要被链接到 `$DSH_HOME/profiles/node_modules/dshmarket`（`ensureDshMarketProfileLink`，开发/打包均需）。
+
+### 9.3 打包态实测暴露并修复的四个 Bug
+
+均位于 `src/main/host.ts`，按 systematic-debugging 定位根因后修复：
+
+| # | 现象 | 根因 | 修复 |
+|---|------|------|------|
+| Bug-1 | 安装插件重启后，插件从 profile package.json 消失 | `ensureDesktopProfile` 用「bundles 完全相等」判断是否重拷，用户新装 bundle 与种子不等即整目录 `cpSync` 覆盖，抹掉用户插件 | 改为合并策略：仅补齐缺失的种子依赖/bundle，保留用户追加项；其他种子文件仅缺失时补齐 |
+| Bug-2 | 重启后 Host 启动失败 `ERR_MODULE_NOT_FOUND: <plugin>` | 用户插件落在 `$DSH_HOME/profiles/desktop/node_modules`（pnpm 独立树），loader 裸名 import 沿 dsh-dist 树查找找不到；dsh 自带 `healProfilesModuleFallback` 只链接 install anchor 依赖闭包，不含用户新装包 | 新增 `ensureProfilePluginLinks`：runProfile 前把 profile node_modules 顶层包 junction 到 dsh 根 node_modules（nearest-wins） |
+| Bug-3 | 卸载后 dsh-dist 残留指向已删包的悬空 junction，`rmSync({force})` 在 Windows 悬空 junction 上报 "Path is a directory" | 清理逻辑被 `if (!existsSync(profileNm)) return` 早退挡住；Windows 悬空 junction 需特殊删除 | 清理无条件前置；用 `readlinkSync`+`existsSync` 识别悬空；`unlinkSync` 删除（不跟随），EPERM/EISDIR 回退 `rmdirSync` |
+| Bug-4 | 安装聚合型插件 `@linxin666/dsh-web-ui-all` 后重启，AggregateError 列出 19 个 `ERR_MODULE_NOT_FOUND`（`@linxin666/dsh-client-ui-*`、`dsh-better-sidebar`、`@mlgbnb/dsh-archive-manager` 等） | Bug-2 只链接了 profile node_modules 顶层（直接依赖）；pnpm 把传递依赖放在 `node_modules/.pnpm/node_modules/`（372 个 junction，指向 `.pnpm/<pkg>@ver_hash/node_modules/<pkg>`）。聚合插件的 cordis.patch.yml 把十几个传递依赖声明为 loader entry，loader 裸名 import 全部解析失败 | 抽出 `linkFlatNodeModules(srcNm, destRoot, skipTop?)`，除顶层外额外遍历 `.pnpm/node_modules/` 把全部传递依赖 junction 到 dsh 根 node_modules（nearest-wins，不覆盖 dsh-dist 自带依赖） |
+
+### 9.4 市场 API 契约（从 client bundle 反查）
+
+- 安装：`POST /dsh-market/install`，body `{"url":"<github url>"}`，**必须**带 `Origin: http://127.0.0.1:<port>` 头，否则 403 untrusted origin。
+- 卸载：`POST /dsh-market/uninstall`，body `{"name":"<pkg>"}`，同样需 Origin 头。
+- 注入配置 `{profile: 'desktop', allowRestart: false}` 实测生效（status 返回 `restart:false`）。
+
+### 9.5 最终打包态验证结论
+
+- 启动日志 `host 就绪: http://127.0.0.1:<port>/`，无 AggregateError / ERR_MODULE_NOT_FOUND。
+- `/dsh-market/installed`：`dshmarket` 与 `@linxin666/dsh-web-ui-all` 均 `state=live, hot=true, bundle=true`。
+- `/plugins/dshmarket/client.js` → 200（约 442KB）。
+- 安装 → 重启生效（含聚合插件十几个传递依赖 loader entry）→ 卸载 → 重启干净，全链路通过。
+
+### 9.6 已知遗留
+
+- `fetch-runtime.mjs` 直连 nodejs.org/GitHub 在国内会挂死，建议增加 npmmirror 镜像回退与进度/重试（当前靠手动镜像 + `.versions.json` 跳过）。
+- stderr 有一条非致命警告 `[plugin-manager] cannot determine the boot profile; pass --profile <name> or set DSH_PROFILE`，不影响 Host 启动与插件加载。
+- TC-007/008（开关/主题持久化）、TC-201~203（负向/边界：网络失败、损坏插件、版本冲突）、Linux 便携运行时、干净机器冷启动尚未单独验证。

@@ -18,7 +18,7 @@
     surfaceContext: true
     trustedHosts: !!js ctx.webStartup.trustedHosts
 
-# dsh-market（插件市场）运行配置覆盖（需求 001-dsh-market）
+# dsh-market（插件市场）运行配置覆盖（需求 201-dsh-market）
 #
 # dshmarket 经 dsh.profile.bundles 声明为 bundle，其自身 cordis.patch.yml 会
 # insert 行 `{id: dsh-market, name: dshmarket}`（无 config）。此处覆盖该行注入配置：

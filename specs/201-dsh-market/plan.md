@@ -1,9 +1,11 @@
-# 001-dsh-market 技术方案
+# 201-dsh-market 技术方案
 
 > 本文档为 dsh-market 集成的技术实现方案。
-> Module: 001-dsh-market
+> Module: 201-dsh-market
 > 对应规格: [spec.md](./spec.md)
+> 对应任务: [tasks.md](./tasks.md)
 > 对应测试: [test-cases.md](./test-cases.md)
+> Status: Implemented（已实现并打包验证通过）
 > Last Updated: 2026-08-25
 
 ## 1. 技术上下文
@@ -95,8 +97,8 @@
 |------|------|------|
 | `scripts/fetch-runtime.mjs`（新） | 脚本 | 下载便携 Node + standalone pnpm 到 `runtime/`，幂等 |
 | `scripts/collect-dsh.mjs`（扩展） | 脚本 | 物化 dsh-market 产物到 `dsh-dist/node_modules/dshmarket` |
-| `src/main/runtime.ts`（新） | `setupBundledRuntime()` | chmod 运行时 + 写 dsh shim + 前置 PATH（`app.isPackaged` 时） |
-| `src/main/index.ts`（扩展） | 调用 | `whenReady` 内、`startHost()` 前调 `setupBundledRuntime()` |
+| `src/main/runtime.ts`（新） | `setupMarketRuntime()` | chmod 运行时 + 写 dsh shim + 前置 PATH（开发态写 dsh shim 指向 sibling dsh 源码；打包态写便携 node + dsh-dist） |
+| `src/main/index.ts`（扩展） | 调用 | `whenReady` 内、`startHost()` 前调 `setupMarketRuntime()` |
 | `profiles/desktop/package.json`（扩展） | manifest | 加 `dshmarket` 到 dependencies + bundles |
 | `profiles/desktop/cordis.patch.yml`（扩展） | patch | insert 市场行 + config |
 
@@ -145,7 +147,7 @@
 | `scripts/collect-dsh.mjs`（改） | 物化 dsh-market 产物到 `dsh-dist/node_modules/dshmarket` |
 | `src/main/runtime.ts`（新） | `setupBundledRuntime()`：chmod + shim + PATH |
 | `src/main/index.ts`（改） | 调 `setupBundledRuntime()` |
-| `src/main/host.ts`（改，开发态） | 确保 dshmarket 可解析（symlink/物化） |
+| `src/main/host.ts`（改） | 确保 dshmarket 可解析（symlink/物化）；`ensureProfilePluginLinks` 链接用户插件顶层 + `.pnpm/node_modules` 传递依赖到 dsh 根 node_modules |
 | `profiles/desktop/package.json`（改） | 加 dshmarket 依赖 + bundle |
 | `profiles/desktop/cordis.patch.yml`（改） | insert 市场行 + config |
 
@@ -159,3 +161,35 @@
 | FR-001-006（client bundle 服务） | dshmarket `dsh.client` + 物化 `client/` |
 | FR-001-007/008/009/010（安装通道） | `runtime.ts` + `dsh` shim + PATH + `dsh-dist/lib/bin.js` + pnpm |
 | FR-001-011/012（配置持久化、HMR 降级） | 市场自管 patch/state；`allowRestart:false` + `DSH_DISABLE_HMR` |
+
+## 10. 实现偏差与调试记录（As-built）
+
+> 实现过程中相对原方案的调整与实测踩坑，作为维护基线。详细 Bug 表见 [spec.md 第 9 节](./spec.md#9-实现与调试记录as-built)。
+
+### 10.1 与原方案的差异
+
+| 项 | 原方案 | 实际实现 | 原因 |
+|----|--------|----------|------|
+| 运行时引导函数名 | `setupBundledRuntime()` | `setupMarketRuntime()` | 命名收敛到市场语义；同时覆盖开发态与打包态 |
+| 开发态 dsh shim | 方案称开发态跳过运行时注入、依赖系统 Node/pnpm | 开发态也写 `dsh` shim（指向 sibling dsh 源码 `apps/cli/lib/bin.js`）并前置 PATH | 市场 `dshArgv()` 回退 PATH `dsh`，开发态同样需要可解析的 `dsh` 命令才能走安装通道 |
+| dshmarket 运行时依赖 | 仅物化 lib/client | 递归复制 dshmarket 的生产依赖（undici、js-yaml、argparse 等，含传递依赖），`@deepseek-ai/*` 从宿主解析 | npm 扁平布局下这些传递依赖不在 dsh 根 node_modules，不复制则开发态市场 host 端 import 失败 |
+| profile 升级 | 整目录 `cpSync` 覆盖 | 合并策略（仅补齐缺失种子依赖/bundle，保留用户插件） | 覆盖会抹掉用户通过市场安装的插件（Bug-1） |
+| 用户插件解析 | 假设 dsh `healProfilesModuleFallback` 覆盖 | 新增 `ensureProfilePluginLinks`，链接顶层 + `.pnpm/node_modules` 传递依赖 | dsh fallback 只覆盖 install anchor 闭包，不含用户新装插件及其传递依赖（Bug-2/4） |
+| pnpm 形态 | 方案倾向 standalone 单二进制 | 实际使用 pnpm 9.15.9（npm tarball 布局 `pnpm/{bin,dist,...}` + `pnpm.cmd`） | 国内网络下经 npmmirror 获取该布局并验证可用；未强制单二进制 |
+
+### 10.2 打包态关键路径（实测）
+
+- 便携 Node：`resources/runtime/node/node.exe`（v24.11.1）。
+- 便携 pnpm：`resources/runtime/pnpm/pnpm.cmd`（9.15.9），PATH 前置后市场 `spawnSync('pnpm')` 命中。
+- dsh shim：运行时写入 `userData/runtime-bin/dsh.cmd`，内容为 `"<便携node>" "<resources>/dsh-dist/lib/bin.js" %*`。
+- dshmarket 物化：`resources/dsh-dist/node_modules/dshmarket/{lib,client,package.json,cordis.patch.yml}` + 其 `node_modules` 运行时依赖。
+- profile 插件链接：`ensureProfilePluginLinks()` 在 `runProfile` 前执行，先清理悬空 junction，再链接 profile 顶层与 `.pnpm/node_modules` 到 `dsh-dist/node_modules`。
+
+### 10.3 collect-dsh 健壮性调整
+
+- `collect-dsh.mjs` 对 dshmarket 物化失败改为 hard-fail（而非静默跳过），避免打包出「能启动但市场缺失」的残缺产物。
+- 物化后清理非目标架构的原生模块 prebuilds（darwin/linux/arm），避免 Linux 打包 rpm strip 失败（前期修复）。
+
+### 10.4 网络构建说明
+
+`fetch-runtime.mjs` 默认从 nodejs.org / GitHub releases 下载，在本机直连挂死；实测通过 npmmirror 镜像下载 Node zip 与 pnpm tarball，按 `runtime/` 预期布局放置并写入 `.versions.json` 后，`fetch-runtime` 幂等跳过。脚本逻辑未改，后续建议加入镜像回退（见 spec 9.6 遗留项）。
