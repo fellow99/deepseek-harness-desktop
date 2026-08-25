@@ -305,8 +305,12 @@ function ensureDshMarketProfileLink(): void {
  * `cordis-plugin-loader` 位于 `<dsh根>/node_modules/@deepseek-ai/`，用裸 `import('<plugin>')` 加载
  * bundle 时 Node 沿 dsh 根目录树向上查找 node_modules，到不了独立的 profile 目录树，导致
  * ERR_MODULE_NOT_FOUND、Host 启动失败。dsh 自带的 healProfilesModuleFallback 仅链接 install
- * anchor 依赖闭包内的包，不含用户新装的插件，故此处补一环：把 profile node_modules 的顶层包
- * 链接到 dsh 根 node_modules（nearest-wins：已存在的 dshmarket/@deepseek-ai 等不覆盖）。
+ * anchor 依赖闭包内的包，不含用户新装的插件，故此处补两环：
+ *  1. 把 profile node_modules 顶层包（直接依赖）链接到 dsh 根 node_modules；
+ *  2. 把 pnpm 虚拟存储 `profile/node_modules/.pnpm/node_modules/` 下的全部包（含传递依赖）
+ *     也链接过去 —— 聚合型插件（如 dsh-web-ui-all）会把十几个传递依赖声明为 loader entry，
+ *     仅链接顶层直接依赖会导致这些 entry ERR_MODULE_NOT_FOUND。
+ * 均为 nearest-wins（已存在的 dshmarket/@deepseek-ai/dsh-dist 自带依赖不覆盖）。
  * 必须在 runProfile 之前执行（healProfilesModuleFallback 之后或之前均可，链接幂等）。
  */
 function ensureProfilePluginLinks(): void {
@@ -359,15 +363,40 @@ function ensureProfilePluginLinks(): void {
   // 以下为"把 profile 已装插件链接到 dsh 根"逻辑，需要 profile node_modules 存在。
   const profileNm = join(home, 'profiles', 'desktop', 'node_modules');
   if (!existsSync(profileNm)) return;
-  for (const entry of readdirSync(profileNm)) {
-    if (entry === '.pnpm' || entry === '.bin' || entry.startsWith('.')) continue;
-    const src = join(profileNm, entry);
+  // (1) 顶层 profile node_modules：用户直接安装的插件（dependencies 顶层）。
+  //     跳过 .pnpm（虚拟存储，单独处理）、.bin、其他点文件。
+  linkFlatNodeModules(profileNm, rootNm, new Set(['.pnpm']));
+  // (2) pnpm 虚拟存储的扁平化目录：profile/node_modules/.pnpm/node_modules/，
+  //     pnpm 在此放所有「安装闭包内」包的 junction（含直接依赖的传递依赖），
+  //     每个 junction 指向 .pnpm/<pkg>@ver_hash/node_modules/<pkg>，后者即该包
+  //     解析其自身依赖的锚点。部分插件（如 dsh-web-ui-all 聚合包）的 cordis.patch.yml
+  //     会把十几个传递依赖（@linxin666/dsh-client-ui-* 等）声明为 loader entry，
+  //     loader 裸名 import 它们时沿 dsh 根目录树查找，仅链接顶层直接依赖会
+  //     ERR_MODULE_NOT_FOUND。故把虚拟存储扁平化目录也整体链接到 dsh 根 node_modules
+  //     （nearest-wins：dsh-dist 已物化/顶层已链接的包不覆盖，避免版本错配）。
+  const pnpmFlatNm = join(profileNm, '.pnpm', 'node_modules');
+  if (existsSync(pnpmFlatNm)) linkFlatNodeModules(pnpmFlatNm, rootNm);
+}
+
+/**
+ * 把一个「扁平 node_modules 目录」（顶层为 unscoped 包 + @scope/ 子目录）中的每个包
+ * 以 junction 链接到 destRoot（dsh 根 node_modules），使 loader 裸名 import 可解析。
+ * nearest-wins：destRoot 已存在的条目（dsh-dist 物化的运行时依赖、顶层已链接的直接
+ * 依赖）不覆盖，保证宿主自带版本优先、避免版本错配。
+ *
+ * @param skipTop 顶层需跳过的条目名（如 profileNm 的 `.pnpm` 本身）
+ */
+function linkFlatNodeModules(srcNm: string, destRoot: string, skipTop?: Set<string>): void {
+  for (const entry of readdirSync(srcNm)) {
+    if (entry === '.bin' || entry.startsWith('.')) continue;
+    if (skipTop?.has(entry)) continue;
+    const src = join(srcNm, entry);
     let stat;
     try { stat = statSync(src); } catch { continue; }
     if (!stat.isDirectory() && !stat.isSymbolicLink()) continue;
     if (entry.startsWith('@')) {
       // scoped 包：链接其下每个包
-      const scopeDest = join(rootNm, entry);
+      const scopeDest = join(destRoot, entry);
       mkdirSync(scopeDest, { recursive: true });
       for (const pkg of readdirSync(src)) {
         const s = join(src, pkg);
@@ -376,7 +405,7 @@ function ensureProfilePluginLinks(): void {
         try { symlinkSync(s, d, 'junction'); } catch { /* 忽略竞争/权限 */ }
       }
     } else {
-      const d = join(rootNm, entry);
+      const d = join(destRoot, entry);
       if (existsSync(d)) continue;
       try { symlinkSync(src, d, 'junction'); } catch { /* 忽略竞争/权限 */ }
     }

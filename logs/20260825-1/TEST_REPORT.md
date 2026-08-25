@@ -14,7 +14,7 @@
 | TC-002 | dsh-market 产物收集 | ✅ | ✅ dsh-dist 内物化完整 |
 | TC-003 | 自动加载（市场入口出现） | ✅ | ✅ |
 | TC-004 | 浏览社区目录 | ✅ | ✅ registry 200（1.44MB） |
-| TC-005 | 安装插件 | — | ✅ dsh-composer-expand@0.1.2 |
+| TC-005 | 安装插件 | — | ✅ dsh-composer-expand@0.1.2 + 聚合插件 @linxin666/dsh-web-ui-all@0.3.3 |
 | TC-006 | 卸载插件 | — | ✅ |
 | TC-007 | 插件开关持久化 | ⏸ | ⏸（未测开关） |
 | TC-008 | 主题切换持久化 | ⏸ | ⏸（未测主题） |
@@ -70,8 +70,21 @@
 | Bug-1 | 安装插件并重启后，插件从 package.json 消失 | `ensureDesktopProfile` 用"bundles 完全相等"判断是否重拷，用户新装的 bundle 与种子不等即整目录 `cpSync` 覆盖，抹掉用户插件 | 改为合并策略：仅补齐缺失的种子依赖/bundle，保留用户追加项；其他种子文件仅在缺失时补齐 |
 | Bug-2 | 重启后 Host 启动失败 `ERR_MODULE_NOT_FOUND: dsh-composer-expand` | 用户插件装在 `$DSH_HOME/profiles/desktop/node_modules`（pnpm 独立树），而 `cordis-plugin-loader` 在 `dsh-dist/node_modules/@deepseek-ai/` 用裸名 import，Node 沿 dsh-dist 树向上查找找不到；dsh 自带 `healProfilesModuleFallback` 只链接 install anchor 依赖闭包，不含用户新装包 | 新增 `ensureProfilePluginLinks`：runProfile 前把 profile node_modules 顶层包 junction 到 dsh 根 node_modules，nearest-wins 不覆盖已有包 |
 | Bug-3 | 卸载后 dsh-dist 残留指向已删包的悬空 junction | 上一轮启动建的 junction 在 pnpm 删除 profile 包后悬空；清理逻辑被 `if (!existsSync(profileNm)) return` 早退挡住，且 `rmSync({force})` 在 Windows 悬空 junction 上报 "Path is a directory" | 清理无条件前置（不依赖 profileNm 存在）；用 `readlinkSync`+`existsSync` 识别悬空；删除用 `unlinkSync`（不跟随链接），EPERM/EISDIR 回退 `rmdirSync` |
+| Bug-4 | 安装聚合型插件 `@linxin666/dsh-web-ui-all` 后，重启 Host 崩溃，AggregateError 列出 19 个 `ERR_MODULE_NOT_FOUND`（`@linxin666/dsh-client-ui-*`、`dsh-better-sidebar`、`@mlgbnb/dsh-archive-manager` 等） | Bug-2 的 `ensureProfilePluginLinks` 只链接了 profile `node_modules` **顶层**包（直接依赖），而 pnpm 把传递依赖放在 `node_modules/.pnpm/node_modules/`（372 个 junction，185 顶层 + 187 scoped，指向 `.pnpm/<pkg>@ver_hash/node_modules/<pkg>` 真实包目录）。聚合插件的 cordis.patch.yml 把十几个传递依赖声明为 loader entry，loader 裸名 `import()` 沿 dsh-dist 目录树查找时到不了 pnpm 虚拟存储，全部解析失败 | 抽出 `linkFlatNodeModules(srcNm, destRoot, skipTop?)` 助手：除 profile 顶层外，额外遍历 `profile/node_modules/.pnpm/node_modules/` 把全部传递依赖也 junction 到 dsh 根 node_modules（nearest-wins，dsh-dist 已物化/顶层已链接的包不覆盖）；悬空清理逻辑不变（已覆盖 rootNm 顶层与各 @scope 子目录） |
 
-三个 Bug 修复后，安装→重启生效→删除→重启干净的完整循环在打包态通过。
+### Bug-4 验证（聚合型大插件全量加载）
+
+插件：`@linxin666/dsh-web-ui-all@^0.3.3`（来源 GitHub，安装时 pnpm 装入 372 个包，其 cordis.patch.yml 声明 19 个传递依赖作为 loader entry）。
+
+| 检查项 | 结果 |
+|--------|------|
+| Host 启动 | `[dsh-desktop] host 就绪: http://127.0.0.1:50306/`，无 AggregateError、无 ERR_MODULE_NOT_FOUND |
+| stderr | 仅一条非致命 `[plugin-manager] cannot determine the boot profile` 警告，不影响启动 |
+| `/` | 200（20027 字节，Web UI 正常） |
+| `/dsh-market/installed` | `@linxin666/dsh-web-ui-all` 与 `dshmarket` 均 `state=live, hot=true`；`bundles=["dshmarket","@linxin666/dsh-web-ui-all"]` |
+| `/plugins/dshmarket/client.js` | 200（442152 字节） |
+
+四个 Bug 修复后，安装→重启生效（含聚合型大插件的十几个传递依赖 loader entry）→删除→重启干净的完整循环在打包态通过。
 
 ## 五、开发态历史验证（保留）
 
