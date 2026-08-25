@@ -112,8 +112,8 @@ function collectDshMarket() {
   const marketRoot = resolve(desktopRoot, '../dsh-market');
   const dest = resolve(distDir, 'node_modules/dshmarket');
   if (!existsSync(resolve(marketRoot, 'package.json'))) {
-    console.warn(`[collect-dsh] dsh-market 未找到，跳过: ${marketRoot}`);
-    return;
+    console.error(`[collect-dsh] dsh-market 未找到（打包必需，先构建 ../dsh-market）: ${marketRoot}`);
+    process.exit(1);
   }
   if (existsSync(resolve(dest, 'package.json'))) {
     console.log('[collect-dsh] dshmarket 已物化');

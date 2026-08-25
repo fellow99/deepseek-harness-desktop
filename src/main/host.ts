@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, symlinkSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { inspect } from 'node:util';
@@ -89,8 +89,22 @@ function findProfileBootEntry(): string | null {
  */
 function ensureDesktopProfile(home: string): void {
   const dest = join(home, 'profiles', 'desktop');
-  if (existsSync(join(dest, 'package.json'))) return;
-  if (!existsSync(DESKTOP_PROFILE_SRC)) return;
+  const srcPkg = join(DESKTOP_PROFILE_SRC, 'package.json');
+  if (!existsSync(srcPkg)) return;
+  const destPkg = join(dest, 'package.json');
+  if (existsSync(destPkg)) {
+    // 已存在：比较 bundles 是否一致。一致则跳过（幂等）；不一致则重新复制（升级迁移，
+    // 如 0.1.0 → 0.1.1 新增 dshmarket bundle，老用户的旧 profile 副本需更新）。
+    try {
+      const readBundles = (p: string): unknown[] => {
+        const m = JSON.parse(readFileSync(p, 'utf8')) as { dsh?: { profile?: { bundles?: unknown[] } } };
+        return m.dsh?.profile?.bundles ?? [];
+      };
+      if (JSON.stringify(readBundles(srcPkg)) === JSON.stringify(readBundles(destPkg))) return;
+    } catch {
+      return; // 解析失败保持现状，避免破坏用户已修改的 profile
+    }
+  }
   mkdirSync(dest, { recursive: true });
   cpSync(DESKTOP_PROFILE_SRC, dest, { recursive: true });
 }
@@ -161,10 +175,6 @@ function linkWorkspacePackage(pkgDir: string, dest: string): void {
   }
 }
 
-/** 将 dsh-market（插件市场，非 scoped 包）构建产物物化到 dsh 根 node_modules，使 loader 默认 ESM import 可解析。
- *  仅复制 lib/、client/、cordis.patch.yml、package.json（排除 node_modules）——dshmarket 的 @deepseek-ai 依赖
- *  从宿主（dsh 根 node_modules，经 ensureWorkspaceLinks）解析，避免其 devDeps 里的 @deepseek-ai 重复/版本错配。
- *  与 collect-dsh.mjs 的打包物化（dsh-dist/node_modules/dshmarket）对齐。 */
 /** 递归复制 dshmarket 的运行时依赖（其 dependencies 字段 + 传递依赖）到物化目录。
  *  npm 扁平布局下传递依赖也位于顶层，逐包读 dependencies 遍历。仅复制生产依赖，
  *  避免 devDeps（react/vitest 等）的体积膨胀与 @deepseek-ai 副本的版本错配。 */
@@ -194,11 +204,20 @@ function copyMarketRuntimeDeps(srcNm: string, destNm: string, marketRoot: string
   }
 }
 
+/** 将 dsh-market（插件市场，非 scoped 包）构建产物物化到 dsh 根 node_modules，使 loader 默认 ESM import 可解析。
+ *  仅复制 lib/、client/、cordis.patch.yml、package.json + 运行时依赖；dshmarket 的 @deepseek-ai 依赖
+ *  从宿主（dsh 根 node_modules，经 ensureWorkspaceLinks）解析，避免其 devDeps 里的 @deepseek-ai 副本版本错配。
+ *  与 collect-dsh.mjs 的打包物化（dsh-dist/node_modules/dshmarket）对齐。 */
 function ensureDshMarketMaterialized(): void {
   const src = resolve(__dirname, '../../../dsh-market');
   const dest = join(DSH_ROOT, 'node_modules', 'dshmarket');
-  if (!existsSync(join(src, 'package.json')) || existsSync(join(dest, 'package.json'))) return;
+  if (!existsSync(join(src, 'package.json'))) return;
+  // 已物化且未过期（src lib 未重新构建）则跳过；否则清理重物化，避免陈旧产物（开发者重建 dsh-market 后）。
+  const srcLib = join(src, 'lib', 'index.js');
+  const destLib = join(dest, 'lib', 'index.js');
+  if (existsSync(destLib) && existsSync(srcLib) && statSync(srcLib).mtimeMs <= statSync(destLib).mtimeMs) return;
   try {
+    rmSync(dest, { recursive: true, force: true });
     mkdirSync(dest, { recursive: true });
     for (const entry of ['package.json', 'cordis.patch.yml', 'lib', 'client']) {
       const s = join(src, entry);

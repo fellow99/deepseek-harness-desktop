@@ -76,10 +76,14 @@ export function setupBundledRuntime(): void {
     return;
   }
 
-  // 前置 PATH：[userData/runtime-bin, resources/runtime/pnpm] + 原 PATH
+  // 前置 PATH：[userData/runtime-bin, resources/runtime/pnpm, 便携 Node 的 bin] + 原 PATH。
+  // 便携 Node 的 bin 也需入 PATH：pnpm 运行插件生命周期脚本（prepare 等）时按名调用 node。
   const sep = isWin() ? ';' : ':';
   const pnpmDir = join(process.resourcesPath, 'runtime', 'pnpm');
+  const nodeDir = isWin()
+    ? join(process.resourcesPath, 'runtime', 'node')
+    : join(process.resourcesPath, 'runtime', 'node', 'bin');
   const prev = process.env.PATH ?? '';
-  process.env.PATH = [binDir, pnpmDir, prev].filter(Boolean).join(sep);
+  process.env.PATH = [binDir, pnpmDir, nodeDir, prev].filter(Boolean).join(sep);
   console.log('[dsh-desktop] 便携运行时已就绪（Node + pnpm + dsh shim）');
 }

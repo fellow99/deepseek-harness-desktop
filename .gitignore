@@ -29,6 +29,7 @@ yarn-error.log*
 /out
 /dsh-dist
 /dsh-dist-tmp
+/runtime
 
 .sisyphus
 .opencode
