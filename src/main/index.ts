@@ -7,7 +7,7 @@ import {
   setupSystemCertificates,
 } from './lifecycle';
 import { startHost, type HostHandle } from './host';
-import { setupBundledRuntime } from './runtime';
+import { setupMarketRuntime } from './runtime';
 import { createMainWindow, registerWindowIpcHandlers } from './windows';
 import { createTray, destroyTray } from './tray';
 import { setupNotifications } from './notifications';
@@ -44,8 +44,8 @@ if (!gotLock) {
     // Windows 原生通知需要 AppUserModelID
     app.setAppUserModelId('com.fellow99.deepseek-harness-desktop');
 
-    // 便携运行时引导：内置 Node + pnpm + dsh shim（供 dsh-market 安装/删除插件；仅打包态生效）
-    setupBundledRuntime();
+    // 包操作运行时引导：dsh shim + PATH 注入（供 dsh-market 安装/删除插件；开发/打包均生效）
+    setupMarketRuntime();
 
     // 注册窗口控制薄 IPC（preload 的 window.dsh 调用）
     registerWindowIpcHandlers();
