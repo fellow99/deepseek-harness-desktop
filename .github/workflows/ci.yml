@@ -14,9 +14,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        # Windows 同时产出 Squirrel 安装器与 zip 目录包，但二者串行在单个 job 内会超过
+        # 60 分钟超时（打包本身约 25min，Squirrel 再耗数十分钟）。拆成两个独立 job，
+        # 各自完整构建但只跑一个 maker，可并行且各自不超时。Linux/macOS 保持单 job。
+        include:
+          - name: windows-squirrel
+            os: windows-latest
+            targets: squirrel
+          - name: windows-zip
+            os: windows-latest
+            targets: zip
+          - name: linux
+            os: ubuntu-latest
+            targets: ''
+          - name: macos
+            os: macos-latest
+            targets: ''
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
+    name: build (${{ matrix.name }})
 
     steps:
       - uses: actions/checkout@v7
@@ -58,12 +74,19 @@ jobs:
       - name: Build dsh (apply patches + build)
         run: npm run build:dsh
 
+      # 非 Windows job 不指定 --targets，跑该平台所有 maker（linux: deb/rpm/zip；macos: dmg/zip）。
       - name: Make
-        run: npm run make
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.targets }}" ]; then
+            npm run make -- --targets "${{ matrix.targets }}"
+          else
+            npm run make
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: dist-${{ matrix.os }}
+          name: dist-${{ matrix.name }}
           path: out/make/
           if-no-files-found: error
