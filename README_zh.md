@@ -50,8 +50,8 @@ DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体�
 
 ## 目标平台与分发
 
-- **平台**：Windows + Linux（macOS 后续再考虑）
-- **分发**：先本地打包自用（Electron Forge `make`），暂不做自动更新、代码签名、商店分发
+- **平台**：Windows + Linux + macOS（Electron 三端通用；macOS 制品与 `make` 同流程产出）
+- **分发**：先本地打包自用（Electron Forge `make`）：Windows 出 Squirrel 安装器，macOS 出 DMG（依赖宿主 `hdiutil`，需在 macOS 机器上执行，见 `forge.config.ts`），Linux 出 deb/rpm，并为 `darwin`/`linux`/`win32` 出免安装 ZIP。暂不做自动更新、代码签名、商店分发
 
 ## 技术栈
 

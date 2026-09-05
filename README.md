@@ -50,8 +50,8 @@ Key point: **the renderer loads localhost same-origin — zero CORS, zero auth, 
 
 ## Target platforms & distribution
 
-- **Platforms**: Windows + Linux (macOS later)
-- **Distribution**: local packaging for personal use (Electron Forge `make`); no auto-update, code signing, or store distribution yet
+- **Platforms**: Windows + Linux + macOS (Electron runs on all three; macOS makers land in the same `make` run)
+- **Distribution**: local packaging for personal use (Electron Forge `make`): Squirrel installer for Windows, DMG for macOS (built with the host's native `hdiutil`, only runs on a macOS machine), deb/rpm for Linux, and a plain ZIP for `darwin`/`linux`/`win32` (see `forge.config.ts`). No auto-update, code signing, or store distribution yet
 
 ## Tech stack
 
