@@ -37,9 +37,18 @@ const DESKTOP_PROFILE_SRC = app.isPackaged
   ? join(DSH_ROOT, 'profiles/desktop')
   : resolve(__dirname, '../../profiles/desktop');
 
-/** dsh Cordis Context 的最小接口（仅暴露桌面侧订阅事件所需的字段） */
+/** dsh Cordis Context 的最小接口（仅暴露桌面侧订阅事件与鉴权 URL 所需的字段） */
 export interface HostContext {
   webServer: { port: number };
+  /**
+   * 浏览器会话鉴权（dsh v0.1.2-rc.1 起）：Host 对所有 /api 与首页请求强制
+   * 启动令牌鉴权，只有携带本进程 launch token 的根 URL 才能换取签名 cookie。
+   * 渲染进程必须加载 authenticatedUrl 返回的 `/?token=...`，而非裸 `/`。
+   */
+  connection: {
+    /** 把普通根 URL 换成携带本进程 launch token 的鉴权根 URL。 */
+    authenticatedUrl: (baseUrl: string) => string;
+  };
   /** 订阅 host 事件（cordis ctx.on），供托盘/通知用 */
   on(event: string, listener: (...args: unknown[]) => void): void;
 }
@@ -51,7 +60,11 @@ export interface HostHandle {
   shutdown: (code?: number) => Promise<void> | void;
   /** webserver 实际绑定端口（--port 0 → OS 分配） */
   port: number;
-  /** 同源加载 URL：http://127.0.0.1:<port>/ */
+  /**
+   * 同源鉴权加载 URL：`http://127.0.0.1:<port>/?token=<launchToken>`。
+   * 首次加载时 dsh 用该 token 换取签名 cookie 并 303 重定向到干净的 `/`，
+   * 之后同 authority 的渲染进程请求（含 /api 与 WebSocket）即被放行。
+   */
   url: string;
 }
 
@@ -141,11 +154,18 @@ function ensureDesktopProfile(home: string): void {
     // 解析失败保持现状，避免破坏用户已修改的 profile
   }
 
-  // 补齐种子里的其他文件（cordis.patch.yml 等），不删除 dest 已有文件。
+  // 种子文件同步：产品自有的 cordis.patch.yml 必须随版本更新强制覆盖（它只承载壳的
+  // 组合决策，如 openBrowser:false，不含用户数据）；早期版本漏写 openBrowser 会导致
+  // dsh web 去 spawn 系统浏览器、在 Electron 下拉起异常第二实例使整个进程退出，必须能
+  // 在升级后自愈。其余文件保持「缺失才补齐」，绝不覆盖用户改动。
+  // package.json 不在此列（用户经市场安装的插件依赖在其中，已在上面做合并）。
+  const PRODUCT_OWNED_PROFILE_FILES = new Set(['cordis.patch.yml']);
   for (const name of readdirSync(DESKTOP_PROFILE_SRC)) {
     if (name === 'package.json') continue;
     const destFile = join(dest, name);
-    if (!existsSync(destFile)) cpSync(join(DESKTOP_PROFILE_SRC, name), destFile, { recursive: true });
+    if (PRODUCT_OWNED_PROFILE_FILES.has(name) || !existsSync(destFile)) {
+      cpSync(join(DESKTOP_PROFILE_SRC, name), destFile, { recursive: true });
+    }
   }
 }
 
@@ -157,7 +177,11 @@ interface DshRunProfile {
     patchFiles: readonly string[];
     args: readonly string[];
   }): Promise<{
-    ctx: { webServer: { port: number }; on: HostContext['on'] };
+    ctx: {
+      webServer: { port: number };
+      connection: { authenticatedUrl: (baseUrl: string) => string };
+      on: HostContext['on'];
+    };
     shutdown: { shutdown: (code?: number) => void | Promise<void> };
   }>;
 }
@@ -455,15 +479,22 @@ export async function startHost(): Promise<HostHandle | null> {
       environment: loadLayeredEnv('dsh'),
       profile: 'desktop',
       patchFiles: [],
-      args: ['--port', '0'],
+      // --no-open：桌面壳自带渲染窗口，禁止 dsh web 再去拉起系统默认浏览器
+      //   （Electron 下 process.execPath 是 electron.exe，那个 spawn 本就会失败）。
+      // --port 0：由 OS 分配空闲端口。
+      args: ['--no-open', '--port', '0'],
     });
     const port = ctx.webServer.port;
-    console.log(`[dsh-desktop] host 就绪: http://127.0.0.1:${port}/`);
+    // dsh v0.1.2-rc.1 起强制启动令牌鉴权：裸 `/` 返回 401
+    // （“dsh web authentication required”）。必须加载携带本进程 launch token
+    // 的根 URL，由 dsh 完成一次 token→cookie 交换后重定向到干净 `/`。
+    const url = ctx.connection.authenticatedUrl(`http://127.0.0.1:${port}/`);
+    console.log(`[dsh-desktop] host 就绪: ${url}`);
     return {
       ctx,
       shutdown: (code) => shutdown.shutdown(code ?? 0),
       port,
-      url: `http://127.0.0.1:${port}/`,
+      url,
     };
   } catch (err) {
     // 完整打印（含 AggregateError 的 errors 数组与 cause 链），便于定位失败插件

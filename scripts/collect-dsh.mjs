@@ -15,6 +15,14 @@ import { cpSync, existsSync, lstatSync, readFileSync, readdirSync, realpathSync,
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// pnpm/tsdown 在无 TTY 时中止模块重建与依赖检查，故设 CI 使其自动处理。
+// CI=true 同时让 dsh 的 install-lefthook postinstall 跳过 git hook 安装：本工作区
+// dsh 是 git submodule（common config 含 core.worktree），lefthook 的 worktreeConfig
+// 迁移会失败；而 pnpm deploy 产出的只是打包副本，本就不需要 git hooks。
+process.env.CI = process.env.CI ?? 'true';
+process.env.npm_config_confirm_modules_purge = 'false';
+process.env.COREPACK_ENABLE_DOWNLOAD_PROMPT = '0';
+
 const desktopRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const dshRoot = resolve(desktopRoot, '../deepseek-harness');
 const distDir = resolve(desktopRoot, 'dsh-dist');

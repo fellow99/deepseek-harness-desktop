@@ -12,9 +12,11 @@ import { fileURLToPath } from 'node:url';
 
 const desktopRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const dshRoot = resolve(desktopRoot, '../deepseek-harness');
+// 补丁按 dsh 版本分目录存放；当前构建基于 dsh dsh-v0.1.2-rc.1。
+const patchDir = resolve(desktopRoot, 'patches/dsh-v0.1.2-rc.1');
 const patchFiles = [
-  resolve(desktopRoot, 'patches/dsh-disable-hmr.patch'),
-  resolve(desktopRoot, 'patches/dsh-disable-native-picker.patch'),
+  resolve(patchDir, 'dsh-disable-hmr.patch'),
+  resolve(patchDir, 'dsh-disable-native-picker.patch'),
 ];
 
 // pnpm/tsdown 在无 TTY 时中止模块重建与依赖检查，故设 CI 使其自动处理

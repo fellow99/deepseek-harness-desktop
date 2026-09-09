@@ -7,13 +7,24 @@
 #     `port: !!js ctx.webStartup.port ?? 3080` 已支持，无需在此覆盖）
 #
 # 语法：覆盖行以 id 定位、整块替换 config（参考 dsh 仓库 cordis.patch.yml 示例）。
+# 注意：patch 会整块替换该行 config，必须列全 web-runtime 的四个键，漏掉的键会回退到
+# schema 字面默认值（openBrowser 默认 true），而不是 bundle 里的表达式。
+#
+# openBrowser: false —— 关键。桌面壳用自己的 BrowserWindow loadURL，绝不能让 dsh web
+#   再去拉起系统默认浏览器。dsh 的打开器 spawn 的是 process.execPath（Electron 下即
+#   electron.exe / 打包后的本程序 exe）并以 Node `--eval` 方式运行，会拉起一个异常的
+#   第二实例并导致整个进程树退出。这里写死 false，不依赖命令行 --no-open（该标志经
+#   `!!js ctx.webStartup.openBrowser` 生效，但本覆盖行会把该表达式替换掉）。
+#
 # 覆盖基线（对照 deepseek-harness/packages/bundle/web-app/cordis.patch.yml 的
-# web-runtime 行，printUrl: true → false；surfaceContext/trustedHosts 保持原值）。
+# web-runtime 行：openBrowser 强制 false、printUrl true → false；
+# surfaceContext/trustedHosts 保持原值）。
 
 - id: web-runtime
   name: '@deepseek-ai/dsh-web-app'
   inject: [webStartup]
   config:
+    openBrowser: false
     printUrl: false
     surfaceContext: true
     trustedHosts: !!js ctx.webStartup.trustedHosts
