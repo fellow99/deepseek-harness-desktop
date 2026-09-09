@@ -1,4 +1,5 @@
 import { app, Menu, nativeImage, Tray, type BrowserWindow } from 'electron';
+import path from 'node:path';
 
 /**
  * 系统托盘 + 后台驻留（产品概念设计第 13 节「系统托盘 + 后台驻留」）。
@@ -8,8 +9,15 @@ import { app, Menu, nativeImage, Tray, type BrowserWindow } from 'electron';
 let tray: Tray | null = null;
 
 export function createTray(mainWindow: BrowserWindow): Tray {
-  // TODO(资源)：使用 resources/ 下的真实托盘图标；脚手架阶段用空图标占位
-  const icon = nativeImage.createEmpty();
+  // 托盘图标：开发态取工程根 resources/，打包态取 process.resourcesPath（与 windows.ts 一致）
+  const trayIconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'tray.png')
+    : path.join(__dirname, '../../resources/tray.png');
+  let icon = nativeImage.createFromPath(trayIconPath);
+  if (icon.isEmpty()) {
+    console.warn(`[dsh-desktop] 托盘图标加载失败，回退为空图标: ${trayIconPath}`);
+    icon = nativeImage.createEmpty();
+  }
   tray = new Tray(icon);
 
   const showWindow = (): void => {

@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, nativeTheme, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron';
 import path from 'node:path';
 
 /**
@@ -70,12 +70,17 @@ export function registerWindowIpcHandlers(): void {
  */
 export function createMainWindow(url: string | null): BrowserWindow {
   const isWindows = process.platform === 'win32';
+  // 窗口图标：开发态取工程根 resources/，打包态取 process.resourcesPath（与 runtime.ts 一致）
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.png')
+    : path.join(__dirname, '../../resources/icon.png');
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 800,
     minHeight: 600,
     show: false,
+    icon: iconPath,
     // 无边框 + 自绘标题栏（win32 用 titleBarOverlay，全透明让渲染层自绘背景）
     ...(isWindows
       ? {

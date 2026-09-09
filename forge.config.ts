@@ -11,6 +11,8 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    // 应用图标：@electron/packager 按平台自动补扩展名（win32→icon.ico / darwin→icon.icns / linux→icon.png）
+    icon: 'resources/icon',
     // Linux 可执行文件名：maker-rpm/deb 的 bin 默认取 package.json 的 name，而非 productName。
     // productName 带空格时，Electron Packager 会生成 "DeepSeek Harness Desktop" 可执行文件，
     // 与 maker-rpm/deb 期望的 "deepseek-harness-desktop" 不匹配（Windows/macOS 用 appName 不受影响）。
@@ -25,6 +27,8 @@ const config: ForgeConfig = {
     // Windows：Squirrel 安装器（Electron Forge 无官方 NSIS maker）
     new MakerSquirrel({
       // 不签名（本地打包自用）；authors/description 默认取自 package.json
+      // Windows 安装器图标（Squirrel 需要 .ico）
+      setupIcon: 'resources/icon.ico',
     }),
     // 目录包（免安装，本地自用/调试）
     new MakerZIP({}, ['darwin', 'linux', 'win32']),
