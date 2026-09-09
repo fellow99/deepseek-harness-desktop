@@ -80,8 +80,9 @@ npm run build:dsh   # ① git apply both patches under patches/ → ② pnpm ins
 **Prerequisite — sibling source checkouts.** This project consumes both `deepseek-harness` and `dsh-market` as sibling directories (not submodules). Before building, clone them next to this project:
 
 ```bash
-git clone --branch dsh-v0.1.0-rc.7 https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
-git clone --branch v1.26.0           https://github.com/dsh-market/dsh-market.git       ../dsh-market
+# dsh: replace <specified dsh tag> with the dsh tag pinned in .github/workflows (matches the built-in dsh version)
+git clone --branch <specified dsh tag> https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
+git clone --branch v1.26.0             https://github.com/dsh-market/dsh-market.git         ../dsh-market
 ```
 
 `collect-dsh.mjs` hard-fails if `../dsh-market` is missing (the packaged app bundles it as `dsh-dist/node_modules/dshmarket`); `build:dsh` warns and skips only the marketplace build if it is absent.

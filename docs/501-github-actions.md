@@ -27,7 +27,7 @@
 | 项 | 值 |
 |---|---|
 | 本工程仓库 | `fellow99/deepseek-harness-desktop`（main 分支） |
-| dsh 仓库 | `deepseek-ai/deepseek-harness`（master），pin `dsh-v0.1.0-rc.7`（commit `99f6f02f`） |
+| dsh 仓库 | `deepseek-ai/deepseek-harness`（master），pin **指定 tag**（当前锁定值见 ci.yml / release.yml，与 patches 匹配） |
 | 构建链 | `npm ci` → `npm run build:dsh`（apply patches + `corepack pnpm install` + build）→ `npm run make`（`premake` 钩子自动 `collect-dsh`） |
 | Node 版本 | 22 LTS（Electron 43 + Vite 7 要求 ≥ 22.12） |
 | pnpm 版本 | 11.7.0（dsh `packageManager` 字段，经 `corepack` 管理） |
@@ -43,7 +43,7 @@
 | D1 | dsh checkout 源 | **官方 `deepseek-ai/deepseek-harness`** | 无私有 fork 需求；patches 经 `build:dsh` 的 `git apply` 应用，无需 fork |
 | D2 | release 上传方式 | **`softprops/action-gh-release`** | 社区事实标准，直接 glob 上传 `out/make` 产物，无需额外 Forge 配置 |
 | D3 | workflow 结构 | **`release.yml` + `ci.yml` 两个文件** | `ci.yml` 负责 PR/push 构建验证（不发布），`release.yml` 负责构建+发布；职责分离 |
-| D4 | dsh 版本锁定 | **tag `dsh-v0.1.0-rc.7`** | 语义化可读；`workflow_dispatch` 输入可覆盖；patch 与 dsh 版本耦合，升级需同步改 patch |
+| D4 | dsh 版本锁定 | **锁定指定 tag** | 语义化可读；`workflow_dispatch` 输入可覆盖；patch 与 dsh 版本耦合，升级需同步改 patch |
 | D5 | 平台矩阵 | **Windows + Linux + macOS** | 三平台覆盖；macOS 走 MakerDMG（未签名，见 §9） |
 
 ---
@@ -102,7 +102,7 @@ dsh 是**独立仓库**（非 submodule），本工程经 `../deepseek-harness` 
 - name: Checkout dsh (sibling)
   shell: bash
   env:
-    DSH_REF: dsh-v0.1.0-rc.7   # ci.yml 硬编码；release.yml 用 inputs.dsh_ref || 'dsh-v0.1.0-rc.7'
+    DSH_REF: <指定 tag>   # ci.yml 硬编码；release.yml 用 inputs.dsh_ref || '<指定 tag>'
   run: |
     git clone --depth 1 --branch "${DSH_REF}" \
       https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
@@ -125,7 +125,7 @@ dsh 是**独立仓库**（非 submodule），本工程经 `../deepseek-harness` 
 - name: Checkout dsh (sibling)
   shell: bash
   env:
-    DSH_REF: ${{ github.event.inputs.dsh_ref || 'dsh-v0.1.0-rc.7' }}   # ci.yml 硬编码为 dsh-v0.1.0-rc.7
+    DSH_REF: ${{ github.event.inputs.dsh_ref || '<指定 tag>' }}   # ci.yml 硬编码为指定 tag
   run: |
     git clone --depth 1 --branch "${DSH_REF}" \
       https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness

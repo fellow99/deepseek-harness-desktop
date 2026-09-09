@@ -86,8 +86,9 @@ npm run build:dsh   # ① git apply patches/ 两个补丁 → ② pnpm install�
 **前置条件——同级源码 checkout。** 本工程以同级目录（非 submodule）方式消费 `deepseek-harness` 与 `dsh-market`，构建前需把二者 clone 到本工程的同级目录：
 
 ```bash
-git clone --branch dsh-v0.1.0-rc.7 https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
-git clone --branch v1.26.0           https://github.com/dsh-market/dsh-market.git       ../dsh-market
+# dsh：把 <指定 tag> 换成 .github/workflows 锁定的 dsh tag（对应当前代码内置的 dsh 版本）
+git clone --branch <指定 tag> https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
+git clone --branch v1.26.0    https://github.com/dsh-market/dsh-market.git         ../dsh-market
 ```
 
 若缺少 `../dsh-market`，`collect-dsh.mjs` 会硬失败（打包产物需要把它物化为 `dsh-dist/node_modules/dshmarket`）；`build:dsh` 在缺少时仅告警并跳过市场构建。
