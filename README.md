@@ -98,15 +98,79 @@ git clone --branch v1.26.0             https://github.com/dsh-market/dsh-market.
 > default ESM import, resolved by `host.ts`'s `ensureWorkspaceLinks` linking workspace packages
 > into dsh's root node_modules.
 
-### Start / package
+### Common commands
 
 ```bash
+# This project's deps (npm: Electron / Forge / Vite)
 npm install
-npm start          # Development: Vite build + launch Electron, main process hosts dsh Host and loads its Web UI
-npm run package    # Package: prepackage auto-collects (pnpm deploy materializes dsh artifacts into dsh-dist/, extraResource copies into resources/dsh-dist)
+
+# dsh deps (run inside ../deepseek-harness; pnpm workspace)
+cd ../deepseek-harness && pnpm i
+
+# Development: Vite build + launch Electron, main process hosts dsh Host and loads its Web UI
+npm start
+
+# Package: prepackage auto-collects (pnpm deploy materializes dsh artifacts into dsh-dist/, extraResource copies into resources/)
+npm run package
+
+# Distribution artifacts: Windows Squirrel installer / portable ZIP (makers in forge.config.ts)
+npm run make
 ```
 
 > The packaged output `out/DeepSeek Harness Desktop-win32-x64/` already includes dsh (lib + node_modules + web dist + profile); the exe runs dsh directly.
+
+### Windows local build troubleshooting
+
+On Windows with a restricted network (GitHub unreachable / Corepack limited), `npm run package` can hit three known pitfalls. Verified fixes:
+
+**1. pnpm version mismatch (`pnpm --filter` resolves an old version)**
+
+`deepseek-harness/package.json` pins `packageManager: pnpm@11.7.0`, but `corepack pnpm --filter <pkg> run ...` resolves a different version (e.g. 11.5.2) inside the sub-workspace and fails with `This project is configured to use 11.7.0 of pnpm`. `corepack enable` fails with `EPERM` under an nvm-managed Node (no write access to the node dir), so no pnpm shim is created; `pm-on-fail=ignore` in `.npmrc` also has no effect (the version check runs before config is read).
+
+Fix — hand-roll a `pnpm.cmd` shim that calls corepack, place it in a user-writable dir and put it at the front of `PATH`:
+
+```powershell
+$shimDir = "C:\Users\$env:USERNAME\AppData\Local\pnpm-shim"
+New-Item -ItemType Directory -Path $shimDir -Force | Out-Null
+$corepackCmd = (Get-Command corepack.cmd).Source   # e.g. C:\Program Files\nodejs\corepack.cmd
+Set-Content -Path (Join-Path $shimDir "pnpm.cmd") -Value @"
+@ECHO off
+GOTO start
+:find_dp0
+SET dp0=%~dp0
+EXIT /b
+:start
+SETLOCAL
+call "$corepackCmd" pnpm %*
+"@ -Encoding ASCII
+$env:PATH = "$shimDir;$env:PATH"    # prepend before every build
+```
+
+**2. `fetch-runtime` re-downloads (missing `.versions.json` stamp)**
+
+`scripts/fetch-runtime.mjs` is idempotent via `runtime/.versions.json`. If the first download is interrupted (e.g. shell timeout), `runtime/node/` and `runtime/pnpm/` may be in place while the stamp is unwritten, so the next `npm run package` re-downloads Node + pnpm.
+
+Fix — once `runtime/node/node.exe` and `runtime/pnpm/pnpm.exe` exist, hand-write the stamp to skip the download:
+
+```powershell
+# Must exactly match the `wanted` string the script builds (node / pnpm / platform / arch)
+'{"node":"24.11.1","pnpm":"9.15.9","platform":"win32","arch":"x64"}' |
+  Set-Content -Path .\runtime\.versions.json -Encoding ASCII -NoNewline
+```
+
+**3. Electron binary download `ETIMEDOUT` (GitHub blocked)**
+
+The `electron-forge package` stage downloads the matching Electron binary from `github.com`; a restricted network yields `connect ETIMEDOUT`.
+
+Fix — use the npmmirror China mirror (env vars apply to the current build process):
+
+```powershell
+$env:ELECTRON_MIRROR = "https://registry.npmmirror.com/-/binary/electron/"
+$env:ELECTRON_CUSTOM_DIR = "v{{ version }}"
+npm run package
+```
+
+> Combining all three (pnpm shim on PATH + stamp in place + Electron mirror) makes `npm run package` / `npm run make` run reliably on a restricted Windows box.
 
 ## Directory structure
 

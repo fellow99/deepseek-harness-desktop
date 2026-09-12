@@ -103,15 +103,79 @@ git clone --branch v1.26.0    https://github.com/dsh-market/dsh-market.git      
 > 开发模式下 loader 回退默认 ESM import，由 `host.ts` 的 `ensureWorkspaceLinks` 把 workspace
 > 包链接到 dsh 根 node_modules 解决。
 
-### 启动 / 打包
+### 常用命令
 
 ```bash
+# 本工程依赖（npm 包，含 Electron / Forge / Vite）
 npm install
-npm start          # 开发模式：Vite 构建 + 启动 Electron，主进程挂起 dsh Host 并加载其 Web UI
-npm run package    # 打包：prepackage 自动 collect（pnpm deploy 物化 dsh 产物到 dsh-dist/，extraResource 打进 resources/dsh-dist）
+
+# dsh 依赖（在 ../deepseek-harness 下执行；pnpm 工程）
+cd ../deepseek-harness && pnpm i
+
+# 开发模式：Vite 构建 + 启动 Electron，主进程挂起 dsh Host 并加载其 Web UI
+npm start
+
+# 打包（prepackage 自动 collect：pnpm deploy 物化 dsh 产物到 dsh-dist/，extraResource 打进 resources/）
+npm run package
+
+# 出分发制品：Windows Squirrel 安装器 / 免安装 ZIP（见 forge.config.ts 的 makers）
+npm run make
 ```
 
 > 打包产物 `out/DeepSeek Harness Desktop-win32-x64/` 已含 dsh（lib + node_modules + web dist + profile），exe 可直接运行 dsh。
+
+### Windows 本地构建排障
+
+Windows + 受限网络（GitHub 不可达 / Corepack 受限）下，`npm run package` 可能踩到以下三个坑。均已验证的解法：
+
+**1. pnpm 版本不一致（`pnpm --filter` 解析到旧版本）**
+
+`deepseek-harness` 的 `package.json` 锁定 `packageManager: pnpm@11.7.0`，但 `corepack pnpm --filter <pkg> run ...` 在子工作区会解析到另一个版本（如 11.5.2）并报 `This project is configured to use 11.7.0 of pnpm`。`corepack enable` 在 nvm 管理的 Node 下会因目录无写权限报 `EPERM`，无法生成 pnpm shim；`.npmrc` 的 `pm-on-fail=ignore` 也无效（版本检查发生在读配置之前）。
+
+解法——手工建一个调用 corepack 的 `pnpm.cmd` shim，放到用户可写目录并置于 PATH 前部：
+
+```powershell
+$shimDir = "C:\Users\$env:USERNAME\AppData\Local\pnpm-shim"
+New-Item -ItemType Directory -Path $shimDir -Force | Out-Null
+$corepackCmd = (Get-Command corepack.cmd).Source   # 形如 C:\Program Files\nodejs\corepack.cmd
+Set-Content -Path (Join-Path $shimDir "pnpm.cmd") -Value @"
+@ECHO off
+GOTO start
+:find_dp0
+SET dp0=%~dp0
+EXIT /b
+:start
+SETLOCAL
+call "$corepackCmd" pnpm %*
+"@ -Encoding ASCII
+$env:PATH = "$shimDir;$env:PATH"    # 之后每次构建前都要带上
+```
+
+**2. `fetch-runtime` 重复下载（缺 `.versions.json` 版本戳）**
+
+`scripts/fetch-runtime.mjs` 幂等依赖 `runtime/.versions.json`。若首次下载被中断（如 shell 超时），`runtime/node/` 与 `runtime/pnpm/` 可能已就位但版本戳未写，导致下次 `npm run package` 又重新下载 Node + pnpm。
+
+解法——确认 `runtime/node/node.exe` 与 `runtime/pnpm/pnpm.exe` 存在后，手写版本戳使其跳过下载：
+
+```powershell
+# 内容必须与脚本内拼的 wanted 串完全一致（node / pnpm / platform / arch）
+'{"node":"24.11.1","pnpm":"9.15.9","platform":"win32","arch":"x64"}' |
+  Set-Content -Path .\runtime\.versions.json -Encoding ASCII -NoNewline
+```
+
+**3. Electron 二进制下载 `ETIMEDOUT`（GitHub 被墙）**
+
+`electron-forge package` 阶段会从 `github.com` 下载对应版本的 Electron 二进制，网络受限时报 `connect ETIMEDOUT`。
+
+解法——改用 npmmirror 国内镜像（环境变量在当次构建进程内生效）：
+
+```powershell
+$env:ELECTRON_MIRROR = "https://registry.npmmirror.com/-/binary/electron/"
+$env:ELECTRON_CUSTOM_DIR = "v{{ version }}"
+npm run package
+```
+
+> 三者叠加（pnpm shim 入 PATH + 版本戳就绪 + Electron 镜像）即可在受限 Windows 环境稳定跑通 `npm run package` / `npm run make`。
 
 ## 目录结构
 
