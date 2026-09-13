@@ -28,9 +28,9 @@ DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体�
 │    └─ connection  ← 已把 /api + WebSocket 注册到 webserver     │
 │  就绪后 loadURL(`http://127.0.0.1:${ctx.webServer.port}/`)    │
 │  ┌─ Tray / Notification：订阅 ctx 的 session/event            │
-│  └─ 无边框窗口控制：薄 IPC(min/max/close)                     │
+│  └─ 常规标题栏（系统原生 min/max/close）                     │
 └──────────────▲───────────────────────────────────────────────┘
-               │ contextBridge：window.dsh（仅窗口控制等薄 IPC） │
+               │ （无窗口控制 IPC；渲染层走 HTTP/WS 同源） │
 ┌──────────────┴───────────────────────────────────────────────┐
 │ 渲染进程：loadURL('http://127.0.0.1:<port>/')  ← 同源          │
 │   标准 dsh Web UI（WebApiClient：fetch /api + WS 事件流）      │
@@ -43,8 +43,10 @@ DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体�
 
 - ✅ 系统托盘（退出/唤回）
 - ✅ 原生通知
-- ✅ 无边框窗口 / 自绘标题栏
+- ✅ 常规 Windows 标题栏（系统原生 min/max/close）
 - ✅ 剪贴板图片粘贴
+- ✅ 窗口状态持久化（最大化/位置尺寸，重启恢复）
+- ✅ F11 全屏切换
 
 （暂缓：全局快捷键唤起、开机自启、多窗口；原生文件选择沿用 dsh 标准前端目录浏览）
 
@@ -56,7 +58,7 @@ DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体�
 ## 技术栈
 
 - **Electron** + **Electron Forge**（脚手架与打包）
-- **deepseek-harness**（`dsh`，与本工程**同级目录**，非 submodule，引用路径 `../deepseek-harness`；消费方式为本地源码引用）—— 当前构建基于 **`dsh-v0.1.2-rc.1`**，其补丁位于 `patches/dsh-v0.1.2-rc.1/`
+- **deepseek-harness**（`dsh`，与本工程**同级目录**，非 submodule，引用路径 `../deepseek-harness`；消费方式为本地源码引用）—— 当前构建基于 **`dsh-v0.1.5-rc.2`**，其补丁位于 `patches/dsh-v0.1.5-rc.2/`
 - **dsh-market**（与本工程**同级目录**，引用路径 `../dsh-market`；内置的可视化插件市场，npm 包名 `dshmarket`）
 - **TypeScript**
 
@@ -86,19 +88,19 @@ npm run build:dsh   # ① git apply patches/ 两个补丁 → ② pnpm install�
 **前置条件——同级源码 checkout。** 本工程以同级目录（非 submodule）方式消费 `deepseek-harness` 与 `dsh-market`，构建前需把二者 clone 到本工程的同级目录：
 
 ```bash
-# dsh：锁定 tag = dsh-v0.1.2-rc.1（同时见 .github/workflows，与 patches/dsh-v0.1.2-rc.1/ 对应）
-git clone --branch dsh-v0.1.2-rc.1 https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
+# dsh：锁定 tag = dsh-v0.1.5-rc.2（同时见 .github/workflows，与 patches/dsh-v0.1.5-rc.2/ 对应）
+git clone --branch dsh-v0.1.5-rc.2 https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
 git clone --branch v1.26.0    https://github.com/dsh-market/dsh-market.git         ../dsh-market
 ```
 
 若缺少 `../dsh-market`，`collect-dsh.mjs` 会硬失败（打包产物需要把它物化为 `dsh-dist/node_modules/dshmarket`）；`build:dsh` 在缺少时仅告警并跳过市场构建。
 
-> **dsh 版本锚定**：本工程基于 deepseek-harness tag **`dsh-v0.1.2-rc.1`** 构建。补丁按 dsh 版本分目录存放（`patches/<dsh-tag>/`），`scripts/build-dsh.mjs` 固定指向 `patches/dsh-v0.1.2-rc.1/` —— 升级到新的 dsh tag 时，需新增对应的 `patches/<新 tag>/` 目录并更新该指向。
+> **dsh 版本锚定**：本工程基于 deepseek-harness tag **`dsh-v0.1.5-rc.2`** 构建。补丁按 dsh 版本分目录存放（`patches/<dsh-tag>/`），`scripts/build-dsh.mjs` 固定指向 `patches/dsh-v0.1.5-rc.2/` —— 升级到新的 dsh tag 时，需新增对应的 `patches/<新 tag>/` 目录并更新该指向。
 
 | 补丁 | 作用 |
 |---|---|
-| `patches/dsh-v0.1.2-rc.1/dsh-disable-hmr.patch` | 给 `runProfile` 加 `DSH_DISABLE_HMR` 开关，跳过 watch-only HMR（HMR 依赖 `--expose-internals`）|
-| `patches/dsh-v0.1.2-rc.1/dsh-disable-native-picker.patch` | 让 directory-picker 在 Electron 下强制用 browse（原生对话框 worker 用 electron.exe 启动失败）|
+| `patches/dsh-v0.1.5-rc.2/dsh-disable-hmr.patch` | 给 `runProfile` 加 `DSH_DISABLE_HMR` 开关，跳过 watch-only HMR（HMR 依赖 `--expose-internals`）|
+| `patches/dsh-v0.1.5-rc.2/dsh-disable-native-picker.patch` | 让 directory-picker 在 Electron 下强制用 browse（原生对话框 worker 用 electron.exe 启动失败）|
 
 > Electron 兼容根因：dsh 的 loader 经 `node-addon-require-builtin` 原生模块获取 Node 内部
 > ESM loader，该模块依赖 Electron V8 缺失的 `GetAlignedPointerFromEmbedderData` 符号而失效；
@@ -201,11 +203,12 @@ npm run package
 │   │   │   ├── index.ts           # 单实例锁 → 启动 host → 建窗 → 托盘/通知/生命周期
 │   │   │   ├── host.ts            # runProfile('desktop') → { ctx, shutdown }；插件链接/解析
 │   │   │   ├── runtime.ts         # 便携 Node/pnpm/dsh shim + PATH 注入（市场安装通道）
-│   │   │   ├── windows.ts         # BrowserWindow、loadURL(localhost)、无边框/安全
+│   │   │   ├── windows.ts         # BrowserWindow、loadURL(localhost)、原生 frame/安全
+│   │   │   ├── window-state.ts     # 窗口状态持久化（最大化/位置尺寸）+ F11 全屏
 │   │   │   ├── tray.ts            # 系统托盘（退出/唤回）
 │   │   │   ├── notifications.ts   # 订阅 ctx session/event → 原生通知
 │   │   │   └── lifecycle.ts       # NO_PROXY/CA、崩溃兜底
-│   │   ├── preload/index.ts       # contextBridge：window.dsh（薄 IPC）
+│   │   ├── preload/index.ts       # preload 入口（无窗口控制桥）
 │   │   └── renderer/renderer.ts   # 极薄渲染入口（兜底加载页）
 │   ├── forge.config.ts            # Electron Forge 配置（extraResource 打进 dsh-dist + runtime）
 │   ├── vite.*.config.ts           # Vite 配置（main/preload/renderer）
