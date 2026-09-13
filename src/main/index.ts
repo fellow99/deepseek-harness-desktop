@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu } from 'electron';
 // 静态 import 使 Vite 将其打包进 bundle（forge Vite 插件的 ignore 会排除 node_modules，运行时无法 require）
 import started from 'electron-squirrel-startup';
 import {
@@ -8,7 +8,7 @@ import {
 } from './lifecycle';
 import { startHost, type HostHandle } from './host';
 import { setupMarketRuntime } from './runtime';
-import { createMainWindow, registerWindowIpcHandlers } from './windows';
+import { createMainWindow } from './windows';
 import { createTray, destroyTray } from './tray';
 import { setupNotifications } from './notifications';
 
@@ -44,11 +44,11 @@ if (!gotLock) {
     // Windows 原生通知需要 AppUserModelID
     app.setAppUserModelId('com.fellow99.deepseek-harness-desktop');
 
+    // 去掉 Electron 默认菜单栏（frame:true 下 Windows 会显示默认菜单；同时解除其对 F11 的占用）
+    Menu.setApplicationMenu(null);
+
     // 包操作运行时引导：dsh shim + PATH 注入（供 dsh-market 安装/删除插件；开发/打包均生效）
     setupMarketRuntime();
-
-    // 注册窗口控制薄 IPC（preload 的 window.dsh 调用）
-    registerWindowIpcHandlers();
 
     // 启动 dsh Host（脚手架阶段未接入，返回 null；主进程显示兜底页）
     host = await startHost();

@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 
-// preload Vite 配置（薄 IPC：contextBridge 暴露 window.dsh）。
+// preload Vite 配置（已改为常规标题栏，preload 无副作用；保留入口以维持构建配置）。
 //
 // 入口 src/preload/index.ts 的 basename 为 index，插件默认 entryFileNames
 // '[name].js' 会输出 index.js（且与 main 的输出冲突），而 windows.ts 引用
