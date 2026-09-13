@@ -1,0 +1,14 @@
+diff --git a/apps/cli/src/profile-boot.ts b/apps/cli/src/profile-boot.ts
+index 0715efe1bb..fde3e6ae02 100644
+--- a/apps/cli/src/profile-boot.ts
++++ b/apps/cli/src/profile-boot.ts
+@@ -352,7 +352,8 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
+   // own liveness; the initial check skips a tree that already exited, and the
+   // catch below re-checks for an exit that landed mid-setup. Startup-frozen
+   // profiles apply every user layer above but install no HMR fallback or watcher.
+-  if (composed.profile.patchReload === 'live'
++  if (!process.env.DSH_DISABLE_HMR
++    && composed.profile.patchReload === 'live'
+     && !signalShutdown.signal.aborted
+     && ctx.fiber.state === FiberState.ACTIVE
+     && ctx.get('loader') !== undefined) {

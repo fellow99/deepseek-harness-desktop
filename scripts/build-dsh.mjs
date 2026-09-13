@@ -6,14 +6,14 @@
  * 前置：dsh 与本工程同级目录（../deepseek-harness），git 仓库。
  */
 import { execSync } from 'node:child_process';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, rmSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const desktopRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const dshRoot = resolve(desktopRoot, '../deepseek-harness');
-// 补丁按 dsh 版本分目录存放；当前构建基于 dsh dsh-v0.1.2-rc.1。
-const patchDir = resolve(desktopRoot, 'patches/dsh-v0.1.2-rc.1');
+// 补丁按 dsh 版本分目录存放；当前构建基于 dsh dsh-v0.1.5-rc.2。
+const patchDir = resolve(desktopRoot, 'patches/dsh-v0.1.5-rc.2');
 const patchFiles = [
   resolve(patchDir, 'dsh-disable-hmr.patch'),
   resolve(patchDir, 'dsh-disable-native-picker.patch'),
@@ -46,11 +46,17 @@ if (!existsSync(dshRoot)) {
 }
 
 // 0.5 清理 vendor 残留（collect/deploy 历史错误产物，会被 tsdown 的 vendor/* glob 匹配
-//     并导致 build 报 dsh-root entry 失败）
-const vendorJunk = resolve(dshRoot, 'vendor/deepseek-harness-desktop');
-if (existsSync(vendorJunk)) {
-  rmSync(vendorJunk, { recursive: true, force: true });
-  console.log('[build-dsh] 清理 vendor 残留: vendor/deepseek-harness-desktop');
+//     并导致 build 报 dsh-root entry 失败）。vendor/ 下的真实包都带 package.json，
+//     缺失者即残留空壳（如 vendor/deepseek-harness-desktop、vendor/deepseek-harness-harmony）。
+const vendorDir = resolve(dshRoot, 'vendor');
+if (existsSync(vendorDir)) {
+  for (const entry of readdirSync(vendorDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const junk = resolve(vendorDir, entry.name);
+    if (existsSync(resolve(junk, 'package.json')) || existsSync(resolve(junk, 'src'))) continue;
+    rmSync(junk, { recursive: true, force: true });
+    console.log(`[build-dsh] 清理 vendor 残留: vendor/${entry.name}`);
+  }
 }
 
 // 1. apply patches（幂等：--reverse --check 成功即已应用，跳过）
