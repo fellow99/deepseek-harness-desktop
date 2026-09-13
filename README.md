@@ -56,7 +56,7 @@ Key point: **the renderer loads localhost same-origin — zero CORS, zero auth, 
 ## Tech stack
 
 - **Electron** + **Electron Forge** (scaffolding & packaging)
-- **deepseek-harness** (a sibling directory of this project, not a submodule, referenced as `../deepseek-harness`; consumed via local source reference)
+- **deepseek-harness** (`dsh`, a sibling directory of this project, not a submodule, referenced as `../deepseek-harness`; consumed via local source reference) — current build is based on **`dsh-v0.1.2-rc.1`**; its patches live in `patches/dsh-v0.1.2-rc.1/`
 - **dsh-market** (a sibling directory, referenced as `../dsh-market`; the built-in visual plugin marketplace — npm package `dshmarket`)
 - **TypeScript**
 
@@ -80,17 +80,19 @@ npm run build:dsh   # ① git apply both patches under patches/ → ② pnpm ins
 **Prerequisite — sibling source checkouts.** This project consumes both `deepseek-harness` and `dsh-market` as sibling directories (not submodules). Before building, clone them next to this project:
 
 ```bash
-# dsh: replace <specified dsh tag> with the dsh tag pinned in .github/workflows (matches the built-in dsh version)
-git clone --branch <specified dsh tag> https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
+# dsh: pinned tag = dsh-v0.1.2-rc.1 (also set in .github/workflows; matches patches/dsh-v0.1.2-rc.1/)
+git clone --branch dsh-v0.1.2-rc.1 https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
 git clone --branch v1.26.0             https://github.com/dsh-market/dsh-market.git         ../dsh-market
 ```
 
 `collect-dsh.mjs` hard-fails if `../dsh-market` is missing (the packaged app bundles it as `dsh-dist/node_modules/dshmarket`); `build:dsh` warns and skips only the marketplace build if it is absent.
 
+> **dsh version pin.** This project builds against deepseek-harness tag **`dsh-v0.1.2-rc.1`**. Patches are organized per dsh version (`patches/<dsh-tag>/`) and `scripts/build-dsh.mjs` pins `patches/dsh-v0.1.2-rc.1/` — when bumping to a new dsh tag, add a matching `patches/<new-tag>/` directory and update that pin.
+
 | Patch | Purpose |
 |---|---|
-| `patches/dsh-disable-hmr.patch` | Adds a `DSH_DISABLE_HMR` switch to `runProfile`, skipping watch-only HMR (HMR depends on `--expose-internals`) |
-| `patches/dsh-disable-native-picker.patch` | Forces directory-picker to use browse under Electron (the native dialog worker fails because it spawns electron.exe) |
+| `patches/dsh-v0.1.2-rc.1/dsh-disable-hmr.patch` | Adds a `DSH_DISABLE_HMR` switch to `runProfile`, skipping watch-only HMR (HMR depends on `--expose-internals`) |
+| `patches/dsh-v0.1.2-rc.1/dsh-disable-native-picker.patch` | Forces directory-picker to use browse under Electron (the native dialog worker fails because it spawns electron.exe) |
 
 > Electron compatibility root cause: dsh's loader obtains the Node internal ESM loader via the
 > `node-addon-require-builtin` native module, which fails under Electron because Electron's V8
