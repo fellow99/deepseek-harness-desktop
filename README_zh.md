@@ -78,11 +78,11 @@ DeepSeek Harness（`dsh`）是 DeepSeek AI 开源的 agent harness（智能体�
 
 ### 编译过程（含 patches）
 
-dsh 依赖 Node 内部 API（HMR、原生目录对话框），Electron 下不可用，需打两个补丁后构建。
+dsh 依赖 Node 内部 API（HMR、原生目录对话框），Electron 下不可用，需打三个补丁后构建。
 一条命令完成（幂等，`--reverse --check` 检测已应用则跳过）。它同时会构建同级的 `../dsh-market` 插件市场：
 
 ```bash
-npm run build:dsh   # ① git apply patches/ 两个补丁 → ② pnpm install（node_modules 缺失时）→ ③ build:lib:host + build:lib:client + build:web → ④ 构建 ../dsh-market（缺 node_modules 时 npm install + npm run build）
+npm run build:dsh   # ① git apply patches/ 三个补丁 → ② pnpm install（node_modules 缺失时）→ ③ build:lib:host + build:lib:client + build:web → ④ 构建 ../dsh-market（缺 node_modules 时 npm install + npm run build）
 ```
 
 **前置条件——同级源码 checkout。** 本工程以同级目录（非 submodule）方式消费 `deepseek-harness` 与 `dsh-market`，构建前需把二者 clone 到本工程的同级目录：
@@ -101,6 +101,7 @@ git clone --branch v1.26.0    https://github.com/dsh-market/dsh-market.git      
 |---|---|
 | `patches/dsh-v0.1.5-rc.2/dsh-disable-hmr.patch` | 给 `runProfile` 加 `DSH_DISABLE_HMR` 开关，跳过 watch-only HMR（HMR 依赖 `--expose-internals`）|
 | `patches/dsh-v0.1.5-rc.2/dsh-disable-native-picker.patch` | 让 directory-picker 在 Electron 下强制用 browse（原生对话框 worker 用 electron.exe 启动失败）|
+| `patches/dsh-v0.1.5-rc.2/dsh-disable-welcome-notice.patch` | 移除客户端两步 `settings.onboarding`（版本化内测声明 + 官方 DeepSeek API Key 引导），首启直接进入应用；同步更新 `apply.client.spec.ts` 以匹配实际注册集 |
 
 > Electron 兼容根因：dsh 的 loader 经 `node-addon-require-builtin` 原生模块获取 Node 内部
 > ESM loader，该模块依赖 Electron V8 缺失的 `GetAlignedPointerFromEmbedderData` 符号而失效；
@@ -192,7 +193,8 @@ npm run package
 │   ├── specs/                     # 规范文档（as-built，索引见 specs/README.md）
 │   ├── patches/                   # dsh 上游补丁（git apply，build:dsh 自动应用）
 │   │   ├── dsh-disable-hmr.patch
-│   │   └── dsh-disable-native-picker.patch
+│   │   ├── dsh-disable-native-picker.patch
+│   │   └── dsh-disable-welcome-notice.patch
 │   ├── scripts/                   # 构建脚本
 │   │   ├── build-dsh.mjs          # apply patches + 安装依赖 + 构建 dsh + dsh-market 产物
 │   │   ├── collect-dsh.mjs        # 收集 dsh 产物到 dsh-dist/（pnpm deploy + 物化 dshmarket）

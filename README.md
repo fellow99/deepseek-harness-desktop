@@ -73,7 +73,7 @@ Key point: **the renderer loads localhost same-origin — zero CORS, zero auth, 
 
 ### Build process (with patches)
 
-dsh depends on Node internal APIs (HMR, native directory dialog) that are unavailable under Electron, so two patches must be applied before building. One command does it all (idempotent — `--reverse --check` detects already-applied and skips). It also builds the sibling `../dsh-market` plugin marketplace:
+dsh depends on Node internal APIs (HMR, native directory dialog) that are unavailable under Electron, so three patches must be applied before building. One command does it all (idempotent — `--reverse --check` detects already-applied and skips). It also builds the sibling `../dsh-market` plugin marketplace:
 
 ```bash
 npm run build:dsh   # ① git apply both patches under patches/ → ② pnpm install (if node_modules missing) → ③ build:lib:host + build:lib:client + build:web → ④ build ../dsh-market (npm install if needed + npm run build)
@@ -95,6 +95,7 @@ git clone --branch v1.26.0             https://github.com/dsh-market/dsh-market.
 |---|---|
 | `patches/dsh-v0.1.5-rc.2/dsh-disable-hmr.patch` | Adds a `DSH_DISABLE_HMR` switch to `runProfile`, skipping watch-only HMR (HMR depends on `--expose-internals`) |
 | `patches/dsh-v0.1.5-rc.2/dsh-disable-native-picker.patch` | Forces directory-picker to use browse under Electron (the native dialog worker fails because it spawns electron.exe) |
+| `patches/dsh-v0.1.5-rc.2/dsh-disable-welcome-notice.patch` | Drops the client's two `settings.onboarding` steps (the versioned internal-testing notice and the official-DeepSeek API-key prompt) so a first launch opens straight into the app, and updates `apply.client.spec.ts` to the shipped registration set |
 
 > Electron compatibility root cause: dsh's loader obtains the Node internal ESM loader via the
 > `node-addon-require-builtin` native module, which fails under Electron because Electron's V8
@@ -187,7 +188,8 @@ This project, deepseek-harness (dsh), and dsh-market live in **sibling directori
 │   ├── specs/                     # Spec documents (as-built; see specs/README.md for index)
 │   ├── patches/                   # dsh upstream patches (git apply, auto-applied by build:dsh)
 │   │   ├── dsh-disable-hmr.patch
-│   │   └── dsh-disable-native-picker.patch
+│   │   ├── dsh-disable-native-picker.patch
+│   │   └── dsh-disable-welcome-notice.patch
 │   ├── scripts/                   # Build scripts
 │   │   ├── build-dsh.mjs          # apply patches + install deps + build dsh + dsh-market artifacts
 │   │   ├── collect-dsh.mjs        # collect dsh artifacts into dsh-dist/ (pnpm deploy + materialize dshmarket)

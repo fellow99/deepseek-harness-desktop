@@ -17,6 +17,7 @@ const patchDir = resolve(desktopRoot, 'patches/dsh-v0.1.5-rc.2');
 const patchFiles = [
   resolve(patchDir, 'dsh-disable-hmr.patch'),
   resolve(patchDir, 'dsh-disable-native-picker.patch'),
+  resolve(patchDir, 'dsh-disable-welcome-notice.patch'),
 ];
 
 // pnpm/tsdown 在无 TTY 时中止模块重建与依赖检查，故设 CI 使其自动处理
