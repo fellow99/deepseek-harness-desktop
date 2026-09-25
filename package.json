@@ -1,6 +1,6 @@
 {
-  "name": "deepseek-harness-desktop",
-  "productName": "DeepSeek Harness Desktop",
+  "name": "dsh-desktop",
+  "productName": "DSH Desktop",
   "version": "0.1.5",
   "description": "An Electron-based desktop wrapper for deepseek-harness.",
   "author": "fellow99",

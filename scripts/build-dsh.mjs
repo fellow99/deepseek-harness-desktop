@@ -48,7 +48,7 @@ if (!existsSync(dshRoot)) {
 
 // 0.5 清理 vendor 残留（collect/deploy 历史错误产物，会被 tsdown 的 vendor/* glob 匹配
 //     并导致 build 报 dsh-root entry 失败）。vendor/ 下的真实包都带 package.json，
-//     缺失者即残留空壳（如 vendor/deepseek-harness-desktop、vendor/deepseek-harness-harmony）。
+//     缺失者即残留空壳（如 vendor/dsh-desktop、vendor/dsh-desktop-hos）。
 const vendorDir = resolve(dshRoot, 'vendor');
 if (existsSync(vendorDir)) {
   for (const entry of readdirSync(vendorDir, { withFileTypes: true })) {

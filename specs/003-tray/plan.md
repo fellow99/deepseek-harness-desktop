@@ -94,7 +94,7 @@ tray = Tray 实例 ──destroyTray()──────▶ tray = null（应用
 
 `showWindow`（tray.ts:15-19）：最小化判断 → 还原 → 显示 → 聚焦，四步保证窗口必被唤回并置于前台。
 
-`setToolTip`（tray.ts:21）：设置悬浮提示 `'DeepSeek Harness Desktop'`（实现 FR-003-002）。
+`setToolTip`（tray.ts:21）：设置悬浮提示 `'DSH Desktop'`（实现 FR-003-002）。
 
 ### 6.3 错误处理
 

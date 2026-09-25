@@ -1,6 +1,6 @@
 # TECH.md — 技术选型
 
-> deepseek-harness-desktop 技术选型记录（2026-08-14）。版本以 `package.json` 为准。
+> dsh-desktop 技术选型记录（2026-08-14）。版本以 `package.json` 为准。
 
 ## 1. 技术栈总览
 

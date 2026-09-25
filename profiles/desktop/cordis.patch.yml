@@ -1,4 +1,4 @@
-# deepseek-harness-desktop 自定义 desktop profile 的用户 patch
+# dsh-desktop 自定义 desktop profile 的用户 patch
 #
 # 目的（产品概念设计第 11 节 A1 方案）：
 #   - 复用 web 组合（dsh-base + dsh-web-app）

@@ -42,7 +42,7 @@ if (!gotLock) {
   // ── 3. 主流程 ─────────────────────────────────────────────
   void app.whenReady().then(async () => {
     // Windows 原生通知需要 AppUserModelID
-    app.setAppUserModelId('com.fellow99.deepseek-harness-desktop');
+    app.setAppUserModelId('com.fellow99.dsh.desktop');
 
     // 去掉 Electron 默认菜单栏（frame:true 下 Windows 会显示默认菜单；同时解除其对 F11 的占用）
     Menu.setApplicationMenu(null);

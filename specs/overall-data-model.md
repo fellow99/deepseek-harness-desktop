@@ -1,6 +1,6 @@
 # overall-data-model.md — 数据模型
 
-> deepseek-harness-desktop 全局数据实体与状态定义（2026-08-14）。
+> dsh-desktop 全局数据实体与状态定义（2026-08-14）。
 > 本项目为桌面壳，数据面在 dsh 侧（session/消息/文件等），此处仅记录桌面壳自身的实体与状态。
 
 ## 1. 实体清单

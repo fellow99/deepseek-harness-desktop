@@ -1,6 +1,6 @@
-# AGENTS.md — deepseek-harness-desktop AI Agent 工作规范
+# AGENTS.md — dsh-desktop AI Agent 工作规范
 
-> 本文件定义了本项目（`deepseek-harness-desktop`，DeepSeek Harness Desktop）中 AI Agent 必须遵守的规范和工作流程。
+> 本文件定义了本项目（`dsh-desktop`，DSH Desktop）中 AI Agent 必须遵守的规范和工作流程。
 > 所有规范均基于本机实际已安装的技能（skills）编写，不含虚构内容。
 > 总则见 `~/.agents/AGENTS.md`；本文件为项目级规范，冲突时以本文件为准。
 

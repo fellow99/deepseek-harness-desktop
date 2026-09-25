@@ -2,7 +2,7 @@
 
 # overall-plan.md — 整体技术方案
 
-> deepseek-harness-desktop 系统级技术方案（技术对应 overall-spec，2026-08-14）。
+> dsh-desktop 系统级技术方案（技术对应 overall-spec，2026-08-14）。
 > 本文档描述系统「如何构建」，是各模块 plan.md 的总纲。
 
 ## 1. 技术上下文

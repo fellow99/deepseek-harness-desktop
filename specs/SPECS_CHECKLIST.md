@@ -1,6 +1,6 @@
 # SPECS_CHECKLIST.md — 规格检查清单
 
-> deepseek-harness-desktop 规范文档完成情况追踪（2026-08-14）。
+> dsh-desktop 规范文档完成情况追踪（2026-08-14）。
 
 ## 1. 项目级文档
 

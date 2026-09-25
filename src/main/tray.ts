@@ -26,7 +26,7 @@ export function createTray(mainWindow: BrowserWindow): Tray {
     mainWindow.focus();
   };
 
-  tray.setToolTip('DeepSeek Harness Desktop');
+  tray.setToolTip('DSH Desktop');
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: '显示主窗口', click: showWindow },

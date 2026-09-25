@@ -9,7 +9,7 @@
 
 ### 1.1 目标
 
-为 `deepseek-harness-desktop`（Electron 43 + Electron Forge 7.11.2 + TypeScript，封装同级目录 dsh）建立 GitHub Actions 自动化流水线，实现：
+为 `dsh-desktop`（Electron 43 + Electron Forge 7.11.2 + TypeScript，封装同级目录 dsh）建立 GitHub Actions 自动化流水线，实现：
 
 1. **编译**：在对应平台 runner 上构建 dsh（apply patches + pnpm install + build），再用 `electron-forge make` 产出安装包/目录包。
 2. **提交 release**：tag 触发（或手动触发）时，把各平台产物上传到 GitHub Release。
@@ -26,7 +26,7 @@
 
 | 项 | 值 |
 |---|---|
-| 本工程仓库 | `fellow99/deepseek-harness-desktop`（main 分支） |
+| 本工程仓库 | `fellow99/dsh-desktop`（main 分支） |
 | dsh 仓库 | `deepseek-ai/deepseek-harness`（master），pin **指定 tag**（当前锁定值见 ci.yml / release.yml，与 patches 匹配） |
 | 构建链 | `npm ci` → `npm run build:dsh`（apply patches + `corepack pnpm install` + build）→ `npm run make`（`premake` 钩子自动 `collect-dsh`） |
 | Node 版本 | 22 LTS（Electron 43 + Vite 7 要求 ≥ 22.12） |
@@ -159,15 +159,15 @@ dsh 是**独立仓库**（非 submodule），本工程经 `../deepseek-harness` 
 
 | 平台 | 产物路径 | 文件名（实际） |
 |---|---|---|
-| Windows | `out/make/squirrel.windows/x64/` | `DeepSeek.Harness.Desktop-0.1.0.Setup.exe`、`deepseek_harness_desktop-0.1.0-full.nupkg`、`RELEASES` |
-| Windows | `out/make/zip/win32/x64/` | `DeepSeek.Harness.Desktop-win32-x64-0.1.0.zip` |
-| Linux | `out/make/deb/x64/` | `deepseek-harness-desktop_0.1.0_amd64.deb` |
-| Linux | `out/make/rpm/x64/` | `deepseek-harness-desktop-0.1.0-1.x86_64.rpm` |
-| Linux | `out/make/zip/linux/x64/` | `DeepSeek.Harness.Desktop-linux-x64-0.1.0.zip` |
-| macOS | `out/make/dmg/arm64/` | `DeepSeek.Harness.Desktop-0.1.0-arm64.dmg`（未签名） |
-| macOS | `out/make/zip/darwin/arm64/` | `DeepSeek.Harness.Desktop-darwin-arm64-0.1.0.zip` |
+| Windows | `out/make/squirrel.windows/x64/` | `DSH.Desktop-0.1.0.Setup.exe`、`deepseek_harness_desktop-0.1.0-full.nupkg`、`RELEASES` |
+| Windows | `out/make/zip/win32/x64/` | `DSH.Desktop-win32-x64-0.1.0.zip` |
+| Linux | `out/make/deb/x64/` | `dsh-desktop_0.1.0_amd64.deb` |
+| Linux | `out/make/rpm/x64/` | `dsh-desktop-0.1.0-1.x86_64.rpm` |
+| Linux | `out/make/zip/linux/x64/` | `DSH.Desktop-linux-x64-0.1.0.zip` |
+| macOS | `out/make/dmg/arm64/` | `DSH.Desktop-0.1.0-arm64.dmg`（未签名） |
+| macOS | `out/make/zip/darwin/arm64/` | `DSH.Desktop-darwin-arm64-0.1.0.zip` |
 
-> 注意：productName `DeepSeek Harness Desktop` 带空格，产物文件名里空格被 installer 替换为 `.`（如 `DeepSeek.Harness.Desktop-...`），而 deb/rpm 用 package.json 的 `name`（无空格）。
+> 注意：productName `DSH Desktop` 带空格，产物文件名里空格被 installer 替换为 `.`（如 `DSH.Desktop-...`），而 deb/rpm 用 package.json 的 `name`（无空格）。
 
 ---
 
@@ -213,7 +213,7 @@ release:
 
 ### 问题 1：checkout path 越界（3 errors，致命）
 
-- **现象**：`Repository path '/home/runner/work/.../deepseek-harness' is not under '.../deepseek-harness-desktop'`
+- **现象**：`Repository path '/home/runner/work/.../deepseek-harness' is not under '.../dsh-desktop'`
 - **根因**：`actions/checkout` 的 `path` 参数强制限制在 `$GITHUB_WORKSPACE` 内，`path: ../deepseek-harness` 越界被拒。
 - **修复**：改用 `git clone --depth 1 --branch <ref> ... ../deepseek-harness`（`shell: bash`）。
 
@@ -249,9 +249,9 @@ release:
 
 ### 问题 7：Linux 可执行文件名不匹配
 
-- **现象**：`could not find the Electron app binary at ".../deepseek-harness-desktop"`（仅 Linux maker-rpm/deb）
-- **根因**：Electron Packager 的 `executableName` 默认取 `opts.name`（被 infer 为 `productName` = `DeepSeek Harness Desktop` 带空格），而 maker-rpm/deb 的 `bin` 默认取 `packageJSON.name`（`deepseek-harness-desktop`）。Windows/macOS 的 maker 用 `appName`（productName）所以匹配，唯独 Linux 用 `name` 不匹配。
-- **修复**：`packagerConfig.executableName: 'deepseek-harness-desktop'`，让三平台可执行文件统一为 `name`（maker-squirrel 第 34 行会自动用 `executableName` 查找 exe，不受影响）。
+- **现象**：`could not find the Electron app binary at ".../dsh-desktop"`（仅 Linux maker-rpm/deb）
+- **根因**：Electron Packager 的 `executableName` 默认取 `opts.name`（被 infer 为 `productName` = `DSH Desktop` 带空格），而 maker-rpm/deb 的 `bin` 默认取 `packageJSON.name`（`dsh-desktop`）。Windows/macOS 的 maker 用 `appName`（productName）所以匹配，唯独 Linux 用 `name` 不匹配。
+- **修复**：`packagerConfig.executableName: 'dsh-desktop'`，让三平台可执行文件统一为 `name`（maker-squirrel 第 34 行会自动用 `executableName` 查找 exe，不受影响）。
 
 ### 问题 8：rpm strip 遇 arm64 .node
 
@@ -265,7 +265,7 @@ release:
 
 1. **rpm 依赖**：ubuntu-latest 默认无 `rpmbuild`，必须 `apt-get install rpm`；否则 `make` 在 MakerRpm 的二进制检查阶段直接报错。
 2. **artifact 权限丢失**：upload-artifact 解压后文件权限归 644/755。release job 已 `chmod -R +x` 恢复（§7）。
-3. **Setup.exe 产物名**：实际是 `DeepSeek.Harness.Desktop-0.1.0.Setup.exe`（空格被替换为 `.`）。将来启用 auto-update 时 `RELEASES` 必须一并上传（Squirrel 更新机制依赖）。
+3. **Setup.exe 产物名**：实际是 `DSH.Desktop-0.1.0.Setup.exe`（空格被替换为 `.`）。将来启用 auto-update 时 `RELEASES` 必须一并上传（Squirrel 更新机制依赖）。
 4. **macOS 未签名**：DMG + Electron 二进制未签名，首次打开需右键「打开」绕过 Gatekeeper。正式分发前需补代码签名（超出本方案范围）。
 5. **macOS 架构**：`macos-latest` 是 arm64 runner，产物为 `-arm64` 后缀；若要 x64 产物需扩展矩阵（当前未做）。
 

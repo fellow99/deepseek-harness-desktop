@@ -45,7 +45,7 @@
   - question 通知：host ctx 层无事件，唯一来源是 `apiProxy.events.mux` 流的 `question/requested` 帧（`packages/host/apiproxy/src/api/events.ts:74`）。
 - **触发策略决策**：`turn/end` 仅对 `completed` / `error` 弹通知，其余 `reason.kind`（aborted/blocked/max-tokens/interrupted）静默——避免非关键结束产生噪音（实现 FR-004-003）。
 - **事件载荷占位**：`SessionEventLike` 为最小结构占位，`switch (e.type)` 匹配 `'turn/end'` / `'approval/asked'`，其余 `default` 静默（实现 FR-004-001/002/004）。
-- **Windows AppUserModelID**：Windows 原生通知需 `app.setAppUserModelId('com.fellow99.deepseek-harness-desktop')`（index.ts:42），在 `whenReady` 后、注册通知前设置（实现 FR-004-008 的平台侧支撑）。
+- **Windows AppUserModelID**：Windows 原生通知需 `app.setAppUserModelId('com.fellow99.dsh.desktop')`（index.ts:42），在 `whenReady` 后、注册通知前设置（实现 FR-004-008 的平台侧支撑）。
 
 ## 4. 数据模型
 

@@ -2,7 +2,7 @@
 
 ---
 
-# DeepSeek Harness Desktop
+# DSH Desktop
 
 > An Electron-based desktop wrapper for [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness), providing deep desktop integration.
 
@@ -122,7 +122,7 @@ npm run package
 npm run make
 ```
 
-> The packaged output `out/DeepSeek Harness Desktop-win32-x64/` already includes dsh (lib + node_modules + web dist + profile); the exe runs dsh directly.
+> The packaged output `out/DSH Desktop-win32-x64/` already includes dsh (lib + node_modules + web dist + profile); the exe runs dsh directly.
 
 ### Windows local build troubleshooting
 
@@ -183,7 +183,7 @@ This project, deepseek-harness (dsh), and dsh-market live in **sibling directori
 
 ```
 (sibling directories)
-├── deepseek-harness-desktop/      # This project (Electron desktop shell)
+├── dsh-desktop/      # This project (Electron desktop shell)
 │   ├── docs/                      # Product concept design
 │   ├── specs/                     # Spec documents (as-built; see specs/README.md for index)
 │   ├── patches/                   # dsh upstream patches (git apply, auto-applied by build:dsh)

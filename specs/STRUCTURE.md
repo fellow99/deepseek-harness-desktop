@@ -2,12 +2,12 @@
 
 # STRUCTURE.md — 目录文件结构
 
-> deepseek-harness-desktop 目录结构记录（脚手架搭建后，2026-08-14）。
+> dsh-desktop 目录结构记录（脚手架搭建后，2026-08-14）。
 
 ## 1. 顶层目录树
 
 ```
-deepseek-harness-desktop/
+dsh-desktop/
 ├── .gitignore                # git 忽略（node_modules、.vite、out 等）
 ├── AGENTS.md                 # AI Agent 工作规范（项目级）
 ├── LICENSE                   # MIT

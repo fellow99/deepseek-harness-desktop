@@ -2,7 +2,7 @@
 
 # ARCHITECTURE.md — 整体架构
 
-> deepseek-harness-desktop 整体架构（2026-08-14）。核心设计见 `docs/000-产品概念设计.md`。
+> dsh-desktop 整体架构（2026-08-14）。核心设计见 `docs/000-产品概念设计.md`。
 
 ## 1. 架构一句话
 

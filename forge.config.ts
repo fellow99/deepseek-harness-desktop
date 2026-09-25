@@ -14,9 +14,9 @@ const config: ForgeConfig = {
     // 应用图标：@electron/packager 按平台自动补扩展名（win32→icon.ico / darwin→icon.icns / linux→icon.png）
     icon: 'resources/icon',
     // Linux 可执行文件名：maker-rpm/deb 的 bin 默认取 package.json 的 name，而非 productName。
-    // productName 带空格时，Electron Packager 会生成 "DeepSeek Harness Desktop" 可执行文件，
-    // 与 maker-rpm/deb 期望的 "deepseek-harness-desktop" 不匹配（Windows/macOS 用 appName 不受影响）。
-    executableName: 'deepseek-harness-desktop',
+    // productName 带空格时，Electron Packager 会生成 "DSH Desktop" 可执行文件，
+    // 与 maker-rpm/deb 期望的 "dsh-desktop" 不匹配（Windows/macOS 用 appName 不受影响）。
+    executableName: 'dsh-desktop',
     // dsh 部署产物（dsh-dist/）打进 out/resources/dsh-dist（asar 外，供 host.ts 的
     // ESM 动态 import；含 dsh lib + node_modules + web dist + desktop profile）。
     // 图标：窗口图标（icon.png）与托盘图标（tray.png）需在运行时经 process.resourcesPath 加载，

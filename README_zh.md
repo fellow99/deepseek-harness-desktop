@@ -2,7 +2,7 @@
 
 ---
 
-# DeepSeek Harness Desktop
+# DSH Desktop
 
 > 基于 Electron 的 [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) 桌面封装，提供深度桌面集成体验。
 
@@ -127,7 +127,7 @@ npm run package
 npm run make
 ```
 
-> 打包产物 `out/DeepSeek Harness Desktop-win32-x64/` 已含 dsh（lib + node_modules + web dist + profile），exe 可直接运行 dsh。
+> 打包产物 `out/DSH Desktop-win32-x64/` 已含 dsh（lib + node_modules + web dist + profile），exe 可直接运行 dsh。
 
 ### Windows 本地构建排障
 
@@ -188,7 +188,7 @@ npm run package
 
 ```
 （同级目录）
-├── deepseek-harness-desktop/      # 本工程（Electron 桌面壳）
+├── dsh-desktop/      # 本工程（Electron 桌面壳）
 │   ├── docs/                      # 产品概念设计
 │   ├── specs/                     # 规范文档（as-built，索引见 specs/README.md）
 │   ├── patches/                   # dsh 上游补丁（git apply，build:dsh 自动应用）

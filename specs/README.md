@@ -2,7 +2,7 @@
 
 # 规格文档索引
 
-**项目名称：** deepseek-harness-desktop
+**项目名称：** dsh-desktop
 **版本：** 脚手架阶段（N/A）
 **技术栈：** Electron + Electron Forge + Vite + TypeScript（封装 deepseek-harness）
 **文档生成时间：** 2026-08-14
@@ -178,4 +178,4 @@
 
 ---
 
-**文档维护者：** deepseek-harness-desktop 开发团队
+**文档维护者：** dsh-desktop 开发团队
